@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 mod player;
 mod terrain;
+mod utils;
 
 use bevy_rapier3d::{
     plugin::{NoUserData, RapierPhysicsPlugin},
@@ -22,6 +23,15 @@ fn main() {
             brightness: 0.5,
         })
         .add_systems(Startup, (spawn_terrain, spawn_player))
-        .add_systems(Update, (player_movement, player_touch_platform, respawn))
+        .add_systems(
+            Update,
+            (
+                player_movement,
+                player_touch_platform,
+                player_hover_platform,
+                respawn,
+                force_respawn,
+            ),
+        )
         .run();
 }

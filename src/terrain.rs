@@ -12,6 +12,9 @@ pub struct Platform;
 #[derive(Component)]
 pub struct Touched;
 
+#[derive(Component)]
+pub struct Hovered;
+
 pub fn spawn_terrain(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -36,7 +39,7 @@ pub fn spawn_terrain(
 
     let mut rng = rand::thread_rng();
 
-    let mut position = Vec3::X;
+    let mut position = Vec3::new(PLATFORM_SIZE + 5.0, -2.0, 0.0);
 
     for index in 0..100 {
         let i = index as f32;
@@ -59,6 +62,6 @@ pub fn spawn_terrain(
             rng.gen_range(-5.0..5.0),
         )
         .normalize()
-            * 5.0;
+            * 5.5;
     }
 }
