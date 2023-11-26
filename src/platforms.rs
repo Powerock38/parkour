@@ -71,7 +71,8 @@ pub fn spawn_platform(
         rng.gen_range(0.0..2.0)
     };
 
-    if game.next_platform_position.y > y + 2.0 {
+    // bigger gap if we are going down
+    if game.next_platform_position.y > y + 4.0 {
         platform_spacing = rng.gen_range(6.0..10.0)
     }
 

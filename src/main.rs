@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_wasm_window_resize::WindowResizePlugin;
 
 mod game;
 mod platforms;
@@ -15,6 +16,7 @@ fn main() {
     let app = app
         .add_plugins((
             DefaultPlugins,
+            WindowResizePlugin,
             RapierPhysicsPlugin::<NoUserData>::default(),
             // bevy_rapier3d::render::RapierDebugRenderPlugin::default(),
         ))

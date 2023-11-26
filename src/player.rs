@@ -1,16 +1,18 @@
 use bevy::{
     core_pipeline::Skybox,
-    input::{keyboard::KeyboardInput, ButtonState},
+    input::{keyboard::KeyboardInput, touch::TouchPhase, ButtonState},
     prelude::*,
 };
 use bevy_rapier3d::prelude::*;
-use std::f32::consts::TAU;
+use std::f32::consts::PI;
 
 use crate::{
     game::{init_game, Game},
     platforms::{Hovered, Platform, Touched},
     utils::lerp,
 };
+
+const SPAWN_POINT: Vec3 = Vec3::new(-3.0, 5.0, 0.0);
 
 const GRAVITY: f32 = -6.0;
 const JUMP: f32 = 10.0;
@@ -29,8 +31,6 @@ pub struct Player {
     last_direction_2d: Vec2,
 }
 
-const SPAWN_POINT: Vec3 = Vec3::new(-3.0, 5.0, 0.0);
-
 pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn((
@@ -48,7 +48,7 @@ pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
             c.spawn((
                 Camera3dBundle {
                     projection: Projection::Perspective(PerspectiveProjection {
-                        fov: TAU / 5.0,
+                        fov: PI / 2.0,
                         ..default()
                     }),
                     transform: Transform::from_translation(Vec3::Y),
@@ -66,23 +66,25 @@ pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
 pub fn player_movement(
     time: Res<Time>,
     mut key_event: EventReader<KeyboardInput>,
+    mut touch_event: EventReader<TouchInput>,
     mut player_query: Query<(
         &Transform,
         &mut KinematicCharacterController,
         Option<&KinematicCharacterControllerOutput>,
         &mut Player,
     )>,
-    platforms_untouched: Query<&Transform, (With<Platform>, Without<Touched>, Without<Camera3d>)>,
+    platforms_untouched: Query<&Transform, (With<Platform>, Without<Touched>)>,
 ) {
     let (player_transform, mut controller, controller_output, mut player) =
         player_query.single_mut();
 
     // JUMP
-    if key_event
+    let input_jump = key_event
         .read()
         .any(|e| e.state == ButtonState::Pressed && e.key_code == Some(KeyCode::Space))
-        && controller_output.map(|o| o.grounded).unwrap_or(false)
-    {
+        || touch_event.read().any(|e| e.phase == TouchPhase::Started);
+
+    if input_jump && controller_output.map(|o| o.grounded).unwrap_or(false) {
         player.jump_timer.reset();
     }
 
@@ -193,7 +195,6 @@ pub fn player_touch_platform(
             commands.entity(entity).insert(Touched);
             game.points += 1;
             commands.run_system(game.generate_platform);
-            println!("Score: {}", game.points);
         }
     }
 }
@@ -220,10 +221,11 @@ pub fn respawn(
     mut game: ResMut<Game>,
     mut commands: Commands,
     mut player: Query<(&mut Player, &mut Transform), With<Player>>,
+    mut camera: Query<&mut Transform, (With<Camera3d>, Without<Player>)>,
     platforms: Query<Entity, With<Platform>>,
 ) {
     let (mut player, mut transform) = player.single_mut();
-    if transform.translation.y < game.next_platform_position.y - 60.0 {
+    if transform.translation.y < game.next_platform_position.y - 20.0 {
         player.jump_timer.reset();
         transform.translation = SPAWN_POINT;
 
@@ -233,6 +235,9 @@ pub fn respawn(
 
         game.points = 0;
         game.next_platform_position = Vec3::ZERO;
+
+        let mut camera_transform = camera.single_mut();
+        camera_transform.rotation = Quat::IDENTITY;
 
         init_game(commands, game);
     }
