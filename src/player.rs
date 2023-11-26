@@ -1,4 +1,5 @@
 use bevy::{
+    core_pipeline::Skybox,
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::*,
 };
@@ -6,7 +7,8 @@ use bevy_rapier3d::prelude::*;
 use std::f32::consts::TAU;
 
 use crate::{
-    terrain::{Hovered, Platform, Touched},
+    game::{init_game, Game},
+    platforms::{Hovered, Platform, Touched},
     utils::lerp,
 };
 
@@ -27,9 +29,9 @@ pub struct Player {
     last_direction_2d: Vec2,
 }
 
-const SPAWN_POINT: Vec3 = Vec3::new(0.0, 3.0, 0.0);
+const SPAWN_POINT: Vec3 = Vec3::new(-3.0, 5.0, 0.0);
 
-pub fn spawn_player(mut commands: Commands) {
+pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn((
             Player {
@@ -37,20 +39,27 @@ pub fn spawn_player(mut commands: Commands) {
                 last_direction_2d: Vec2::ZERO,
             },
             RigidBody::KinematicPositionBased,
-            Collider::ball(0.5),
+            Collider::ball(1.0),
             KinematicCharacterController::default(),
             TransformBundle::from_transform(Transform::from_translation(SPAWN_POINT)),
             Ccd { enabled: true },
         ))
         .with_children(|c| {
-            c.spawn(Camera3dBundle {
-                projection: Projection::Perspective(PerspectiveProjection {
-                    fov: TAU / 5.0,
+            c.spawn((
+                Camera3dBundle {
+                    projection: Projection::Perspective(PerspectiveProjection {
+                        fov: TAU / 5.0,
+                        ..default()
+                    }),
+                    transform: Transform::from_translation(Vec3::Y),
                     ..default()
-                }),
-                //transform: Transform::default().looking_at(Vec3::new(1.0, -0.3, 0.0), Vec3::Y),
-                ..default()
-            });
+                },
+                // https://jaxry.github.io/panorama-to-cubemap/
+                // https://www.imgonline.com.ua/eng/cut-photo-into-pieces.php
+                // toktx --cubemap --t2 sky.ktx2 right.jpg left.jpg top.jpg bottom.jpg front.jpg back.jpg
+                // toktx --cubemap --t2 sky.ktx2 px.png nx.png py.png ny.png pz.png nz.png
+                Skybox(asset_server.load("cloud1.ktx2")),
+            ));
         });
 }
 
@@ -58,15 +67,74 @@ pub fn player_movement(
     time: Res<Time>,
     mut key_event: EventReader<KeyboardInput>,
     mut player_query: Query<(
+        &Transform,
         &mut KinematicCharacterController,
         Option<&KinematicCharacterControllerOutput>,
         &mut Player,
     )>,
-    mut camera: Query<(&mut Transform, &GlobalTransform), With<Camera3d>>,
     platforms_untouched: Query<&Transform, (With<Platform>, Without<Touched>, Without<Camera3d>)>,
+) {
+    let (player_transform, mut controller, controller_output, mut player) =
+        player_query.single_mut();
+
+    // JUMP
+    if key_event
+        .read()
+        .any(|e| e.state == ButtonState::Pressed && e.key_code == Some(KeyCode::Space))
+        && controller_output.map(|o| o.grounded).unwrap_or(false)
+    {
+        player.jump_timer.reset();
+    }
+
+    let mut forward_speed = SPEED;
+    let mut vertical_speed = GRAVITY;
+
+    if !player.jump_timer.tick(time.delta()).finished() {
+        vertical_speed = lerp(JUMP, JUMP_MIN, player.jump_timer.percent());
+        forward_speed = SPEED_JUMPING;
+    }
+
+    // MOVEMENT: move towards the closest platform without Touched
+    let mut closest_untouched_platform = None;
+    let mut closest_distance = f32::MAX;
+
+    for platform_transform in platforms_untouched.iter() {
+        let distance = platform_transform
+            .translation
+            .distance(player_transform.translation);
+
+        if distance < closest_distance {
+            closest_untouched_platform = Some(platform_transform);
+            closest_distance = distance;
+        }
+    }
+
+    let closest_untouched_platform_transform =
+        if let Some(closest_untouched_platform) = closest_untouched_platform {
+            closest_untouched_platform
+        } else {
+            return;
+        };
+
+    // get the 2d direction towards the platform, normalized
+    let mut direction_2d = (closest_untouched_platform_transform.translation.xz()
+        - player_transform.translation.xz())
+    .normalize();
+    direction_2d.x = direction_2d.x.max(SPEED_MIN); // cap the minimum speed
+    direction_2d = direction_2d.lerp(player.last_direction_2d, DIRECTION_LERP); // smooth the direction change
+
+    player.last_direction_2d = direction_2d;
+
+    let movement_2d = direction_2d * forward_speed;
+    let movement = Vec3::new(movement_2d.x, vertical_speed, movement_2d.y);
+
+    controller.translation = Some(movement * time.delta_seconds());
+}
+
+pub fn camera_rotation(
+    mut camera: Query<(&mut Transform, &GlobalTransform), With<Camera3d>>,
     platforms_unhovered: Query<&Transform, (With<Platform>, Without<Hovered>, Without<Camera3d>)>,
 ) {
-    let (mut controller, controller_output, mut player) = player_query.single_mut();
     let (mut camera_transform, camera_global_transform) = camera.single_mut();
 
     // CAMERA: look at the closest platform without Hovered
@@ -95,76 +163,22 @@ pub fn player_movement(
     let direction = closest_unhovered_platform_transform.translation
         - camera_global_transform.translation()
         + Vec3::Y * 2.0;
-    let up = Vec3::Y;
-
     // code from Transform::look_at
     let back = -direction.try_normalize().unwrap_or(Vec3::NEG_Z);
-    let right = up
+    let right = Vec3::Y
         .cross(back)
         .try_normalize()
-        .unwrap_or_else(|| up.any_orthonormal_vector());
+        .unwrap_or_else(|| Vec3::Z);
     let up = back.cross(right);
     let rotation = Quat::from_mat3(&Mat3::from_cols(right, up, back));
 
     // Spherical interpolation
     camera_transform.rotation = rotation.slerp(camera_transform.rotation, CAMERA_ROTATION_LERP);
-
-    // JUMP
-    if key_event
-        .read()
-        .any(|e| e.state == ButtonState::Pressed && e.key_code == Some(KeyCode::Space))
-        && controller_output.map(|o| o.grounded).unwrap_or(false)
-    {
-        player.jump_timer.reset();
-    }
-
-    let mut forward_speed = SPEED;
-    let mut vertical_speed = GRAVITY;
-
-    if !player.jump_timer.tick(time.delta()).finished() {
-        vertical_speed = lerp(JUMP, JUMP_MIN, player.jump_timer.percent());
-        forward_speed = SPEED_JUMPING;
-    }
-
-    // MOVEMENT: move towards the closest platform without Touched
-    let mut closest_untouched_platform = None;
-    let mut closest_distance = f32::MAX;
-
-    for platform_transform in platforms_untouched.iter() {
-        let distance = platform_transform
-            .translation
-            .distance(camera_global_transform.translation());
-
-        if distance < closest_distance {
-            closest_untouched_platform = Some(platform_transform);
-            closest_distance = distance;
-        }
-    }
-
-    let closest_untouched_platform_transform =
-        if let Some(closest_untouched_platform) = closest_untouched_platform {
-            closest_untouched_platform
-        } else {
-            return;
-        };
-
-    // get the 2d direction towards the platform, normalized
-    let mut direction_2d = (closest_untouched_platform_transform.translation.xz()
-        - camera_global_transform.translation().xz())
-    .normalize();
-    direction_2d.x = direction_2d.x.max(SPEED_MIN); // cap the minimum speed
-    direction_2d = direction_2d.lerp(player.last_direction_2d, DIRECTION_LERP); // smooth the direction change
-
-    player.last_direction_2d = direction_2d;
-
-    let movement_2d = direction_2d * forward_speed;
-    let movement = Vec3::new(movement_2d.x, vertical_speed, movement_2d.y);
-
-    controller.translation = Some(movement * time.delta_seconds());
 }
 
 pub fn player_touch_platform(
     mut commands: Commands,
+    mut game: ResMut<Game>,
     rapier_context: Res<RapierContext>,
     player: Query<(Entity, &Transform), With<Player>>,
     platforms: Query<Entity, (With<Platform>, Without<Touched>)>,
@@ -177,6 +191,9 @@ pub fn player_touch_platform(
     if let Some((entity, _)) = rapier_context.cast_ray(pos, -Vec3::Y, 2.0, true, filter) {
         if platforms.contains(entity) {
             commands.entity(entity).insert(Touched);
+            game.points += 1;
+            commands.run_system(game.generate_platform);
+            println!("Score: {}", game.points);
         }
     }
 }
@@ -200,23 +217,24 @@ pub fn player_hover_platform(
 }
 
 pub fn respawn(
+    mut game: ResMut<Game>,
     mut commands: Commands,
     mut player: Query<(&mut Player, &mut Transform), With<Player>>,
-    platforms_touched: Query<Entity, With<Touched>>,
-    platforms_hovered: Query<Entity, With<Hovered>>,
+    platforms: Query<Entity, With<Platform>>,
 ) {
     let (mut player, mut transform) = player.single_mut();
-    if transform.translation.y < -50.0 {
+    if transform.translation.y < game.next_platform_position.y - 60.0 {
         player.jump_timer.reset();
         transform.translation = SPAWN_POINT;
 
-        for entity in platforms_touched.iter() {
-            commands.entity(entity).remove::<Touched>();
+        for entity in platforms.iter() {
+            commands.entity(entity).despawn_recursive();
         }
 
-        for entity in platforms_hovered.iter() {
-            commands.entity(entity).remove::<Hovered>();
-        }
+        game.points = 0;
+        game.next_platform_position = Vec3::ZERO;
+
+        init_game(commands, game);
     }
 }
 
