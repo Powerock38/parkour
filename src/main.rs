@@ -42,6 +42,7 @@ fn main() {
     let generate_platform = app.world.register_system(spawn_platform);
 
     app.world.insert_resource(Game {
+        started: false,
         points: 0,
         generate_platform,
         next_platform_position: Vec3::ZERO,

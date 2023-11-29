@@ -20,7 +20,7 @@ const JUMP_MIN: f32 = 0.1;
 const JUMP_TIME: f32 = 0.4;
 const SPEED: f32 = 3.0;
 const SPEED_JUMPING: f32 = 8.0;
-const SPEED_MIN: f32 = 0.1;
+const SPEED_MIN: f32 = 0.2;
 
 const CAMERA_ROTATION_LERP: f32 = 0.97;
 const DIRECTION_LERP: f32 = 0.9;
@@ -51,7 +51,7 @@ pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
                         fov: PI / 2.0,
                         ..default()
                     }),
-                    transform: Transform::from_translation(Vec3::Y),
+                    transform: Transform::from_translation(Vec3::Y).looking_at(Vec3::X, Vec3::Y),
                     ..default()
                 },
                 // https://jaxry.github.io/panorama-to-cubemap/
@@ -67,6 +67,7 @@ pub fn player_movement(
     time: Res<Time>,
     mut key_event: EventReader<KeyboardInput>,
     mut touch_event: EventReader<TouchInput>,
+    mut game: ResMut<Game>,
     mut player_query: Query<(
         &Transform,
         &mut KinematicCharacterController,
@@ -83,6 +84,14 @@ pub fn player_movement(
         .read()
         .any(|e| e.state == ButtonState::Pressed && e.key_code == Some(KeyCode::Space))
         || touch_event.read().any(|e| e.phase == TouchPhase::Started);
+
+    if !game.started {
+        if input_jump {
+            game.started = true;
+        } else {
+            return;
+        }
+    }
 
     if input_jump && controller_output.map(|o| o.grounded).unwrap_or(false) {
         player.jump_timer.reset();
@@ -237,7 +246,7 @@ pub fn respawn(
         game.next_platform_position = Vec3::ZERO;
 
         let mut camera_transform = camera.single_mut();
-        camera_transform.rotation = Quat::IDENTITY;
+        camera_transform.look_at(Vec3::X, Vec3::Y);
 
         init_game(commands, game);
     }

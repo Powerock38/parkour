@@ -4,12 +4,15 @@ const NB_PLATFORMS_INIT: u32 = 10;
 
 #[derive(Resource)]
 pub struct Game {
+    pub started: bool,
     pub points: u32,
     pub generate_platform: SystemId,
     pub next_platform_position: Vec3,
 }
 
-pub fn init_game(mut commands: Commands, game: ResMut<Game>) {
+pub fn init_game(mut commands: Commands, mut game: ResMut<Game>) {
+    game.started = false;
+
     for _ in 0..NB_PLATFORMS_INIT {
         commands.run_system(game.generate_platform);
     }
