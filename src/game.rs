@@ -10,6 +10,12 @@ pub struct Game {
     pub next_platform_position: Vec3,
 }
 
+impl Game {
+    pub fn difficulty(&self) -> f32 {
+        self.points as f32 / 1000.0
+    }
+}
+
 pub fn init_game(mut commands: Commands, mut game: ResMut<Game>) {
     game.started = false;
 

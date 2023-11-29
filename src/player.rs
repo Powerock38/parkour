@@ -97,7 +97,7 @@ pub fn player_movement(
         player.jump_timer.reset();
     }
 
-    let mut forward_speed = SPEED;
+    let mut forward_speed = SPEED * (game.difficulty() + 1.0);
     let mut vertical_speed = GRAVITY;
 
     if !player.jump_timer.tick(time.delta()).finished() {
