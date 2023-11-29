@@ -24,27 +24,27 @@ fn main() {
             color: Color::WHITE,
             brightness: 0.5,
         })
-        .add_systems(Startup, (init_hud, init_game, spawn_player))
+        .add_systems(Startup, (init_hud, init_game.after(init_hud), spawn_player))
         .add_systems(
             Update,
             (
                 player_movement,
                 camera_rotation,
-                player_touch_platform,
-                player_hover_platform,
                 respawn,
                 force_respawn,
                 update_moving_platforms,
             ),
         )
-        .add_systems(PostUpdate, (update_hud,));
+        .add_systems(PostUpdate, (player_touch_platform, player_hover_platform));
 
-    let generate_platform = app.world.register_system(spawn_platform);
+    let spawn_platform_system = app.world.register_system(spawn_platform);
+    let update_hud_system = app.world.register_system(update_hud);
 
     app.world.insert_resource(Game {
         started: false,
         points: 0,
-        generate_platform,
+        update_hud_system,
+        spawn_platform_system,
         next_platform_position: Vec3::ZERO,
     });
 

@@ -6,7 +6,8 @@ const NB_PLATFORMS_INIT: u32 = 10;
 pub struct Game {
     pub started: bool,
     pub points: u32,
-    pub generate_platform: SystemId,
+    pub update_hud_system: SystemId,
+    pub spawn_platform_system: SystemId,
     pub next_platform_position: Vec3,
 }
 
@@ -20,8 +21,10 @@ pub fn init_game(mut commands: Commands, mut game: ResMut<Game>) {
     game.started = false;
 
     for _ in 0..NB_PLATFORMS_INIT {
-        commands.run_system(game.generate_platform);
+        commands.run_system(game.spawn_platform_system);
     }
+
+    commands.run_system(game.update_hud_system);
 }
 
 pub fn init_hud(mut commands: Commands) {

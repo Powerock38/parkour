@@ -203,7 +203,8 @@ pub fn player_touch_platform(
         if platforms.contains(entity) {
             commands.entity(entity).insert(Touched);
             game.points += 1;
-            commands.run_system(game.generate_platform);
+            commands.run_system(game.update_hud_system);
+            commands.run_system(game.spawn_platform_system);
         }
     }
 }
