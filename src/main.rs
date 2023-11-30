@@ -28,14 +28,15 @@ fn main() {
         .add_systems(
             Update,
             (
+                player_touch_platform,
+                player_hover_platform,
                 player_movement,
                 camera_rotation,
                 respawn,
                 force_respawn,
                 update_moving_platforms,
             ),
-        )
-        .add_systems(PostUpdate, (player_touch_platform, player_hover_platform));
+        );
 
     let spawn_platform_system = app.world.register_system(spawn_platform);
     let update_hud_system = app.world.register_system(update_hud);

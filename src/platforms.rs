@@ -39,22 +39,6 @@ pub fn spawn_platform(
 
     let position = game.next_platform_position;
 
-    let mut c = commands.spawn((
-        Platform,
-        Collider::cuboid(size / 2.0, size / 2.0, size / 2.0),
-        RigidBody::Fixed,
-    ));
-
-    //moving platform
-    let moving_platform_chance = game.difficulty().min(0.5);
-    if rng.gen_bool(moving_platform_chance as f64) {
-        c.insert(MovingPlatform {
-            progress: rng.gen_range(-1.0..1.0),
-            going_negative: rng.gen_bool(0.5),
-            z: position.z,
-        });
-    }
-
     let mut next_platform_spacing = PLATFORM_SPACING * (game.difficulty() + 1.0);
 
     let next_platform_y = if rng.gen_bool(0.5) {
@@ -76,13 +60,28 @@ pub fn spawn_platform(
     .normalize()
         * next_platform_spacing;
 
-    c.insert(PbrBundle {
-        mesh,
-        material: materials.add(random_color.into()),
-        transform: Transform::from_translation(position)
-            .looking_at(game.next_platform_position, Vec3::Y),
-        ..default()
-    });
+    let mut c = commands.spawn((
+        PbrBundle {
+            mesh,
+            material: materials.add(random_color.into()),
+            transform: Transform::from_translation(position)
+                .looking_at(game.next_platform_position, Vec3::Y),
+            ..default()
+        },
+        Platform,
+        Collider::cuboid(size / 2.0, size / 2.0, size / 2.0),
+        RigidBody::Fixed,
+    ));
+
+    //moving platform
+    let moving_platform_chance = game.difficulty().min(0.5);
+    if rng.gen_bool(moving_platform_chance as f64) {
+        c.insert(MovingPlatform {
+            progress: rng.gen_range(-1.0..1.0),
+            going_negative: rng.gen_bool(0.5),
+            z: position.z,
+        });
+    }
 }
 
 pub fn update_moving_platforms(
