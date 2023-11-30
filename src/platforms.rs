@@ -1,11 +1,14 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use rand::Rng;
+use rand::{seq::SliceRandom, Rng};
 
-use crate::game::Game;
+use crate::game::{Game, SKYBOXES, SKYBOX_CHANGE_CHANCE};
 
 const PLATFORM_SIZE: f32 = 3.0;
 const PLATFORM_SPACING: f32 = 5.5;
+
+const DIRECTION_BIAS_HORIZONTAL_CHANCE: f64 = 0.1;
+const DIRECTION_BIAS_VERTICAL_CHANCE: f64 = 0.1;
 
 #[derive(Component)]
 pub struct Platform;
@@ -31,41 +34,64 @@ pub fn spawn_platform(
 ) {
     let mut rng = rand::thread_rng();
 
+    // Platform mesh
     let size = PLATFORM_SIZE * (1.0 - game.difficulty()) * rng.gen_range(0.8..1.2);
-
     let mesh = meshes.add(Mesh::from(shape::Cube { size }));
 
-    let random_color = Color::rgb(rng.gen(), rng.gen(), rng.gen());
+    // Small chance to update current skybox
+    if rng.gen_bool(SKYBOX_CHANGE_CHANCE) {
+        game.skybox = SKYBOXES.choose(&mut rng).unwrap();
+        println!("skybox: {:?}", game.skybox);
+        commands.run_system(game.change_skybox_system);
+    }
 
-    let position = game.next_platform_position;
+    // Small chance to update direction bias
+    if rng.gen_bool(DIRECTION_BIAS_HORIZONTAL_CHANCE) {
+        game.direction_bias_horizontal = rng.gen_range(0.0..1.0);
+        println!(
+            "direction_bias.horizontal: {}",
+            game.direction_bias_horizontal
+        );
+    }
 
-    let mut next_platform_spacing = PLATFORM_SPACING * (game.difficulty() + 1.0);
+    if rng.gen_bool(DIRECTION_BIAS_VERTICAL_CHANCE) {
+        game.direction_bias_vertical = rng.gen_range(0.0..1.0);
+        println!("direction_bias.vertical: {}", game.direction_bias_vertical);
+    }
 
-    let next_platform_y = if rng.gen_bool(0.5) {
+    // Position
+    let next_platform_z = if rng.gen_bool(game.direction_bias_horizontal) {
+        rng.gen_range(-5.0..0.0)
+    } else {
+        rng.gen_range(0.0..5.0)
+    };
+
+    let next_platform_y = if rng.gen_bool(game.direction_bias_vertical) {
         rng.gen_range(-5.0..0.0)
     } else {
         rng.gen_range(0.0..2.0)
     };
+
+    let position = game.next_platform_position;
+    let mut next_platform_spacing = PLATFORM_SPACING * (game.difficulty() + 1.0);
 
     // bigger gap if we are going down
     if position.y > next_platform_y + 4.0 {
         next_platform_spacing = rng.gen_range(PLATFORM_SPACING..PLATFORM_SPACING * 2.0)
     }
 
-    game.next_platform_position += Vec3::new(
-        rng.gen_range(4.0..8.0),
-        next_platform_y,
-        rng.gen_range(-5.0..5.0),
-    )
-    .normalize()
-        * next_platform_spacing;
+    // Set next platform position
+    game.next_platform_position +=
+        Vec3::new(rng.gen_range(4.0..8.0), next_platform_y, next_platform_z).normalize()
+            * next_platform_spacing;
 
+    // Spawn platform
     let mut c = commands.spawn((
         PbrBundle {
             mesh,
-            material: materials.add(random_color.into()),
+            material: materials.add(Color::rgb(rng.gen(), rng.gen(), rng.gen()).into()),
             transform: Transform::from_translation(position)
-                .looking_at(game.next_platform_position, Vec3::Y),
+                .looking_at(game.previous_platform_position, Vec3::Y),
             ..default()
         },
         Platform,
@@ -73,7 +99,7 @@ pub fn spawn_platform(
         RigidBody::Fixed,
     ));
 
-    //moving platform
+    // Chance to be a moving platform
     let moving_platform_chance = game.difficulty().min(0.5);
     if rng.gen_bool(moving_platform_chance as f64) {
         c.insert(MovingPlatform {
@@ -82,6 +108,8 @@ pub fn spawn_platform(
             z: position.z,
         });
     }
+
+    game.previous_platform_position = position;
 }
 
 pub fn update_moving_platforms(

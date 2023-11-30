@@ -1,5 +1,4 @@
 use bevy::{
-    core_pipeline::Skybox,
     input::{keyboard::KeyboardInput, touch::TouchPhase, ButtonState},
     prelude::*,
 };
@@ -31,7 +30,7 @@ pub struct Player {
     last_direction_2d: Vec2,
 }
 
-pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
+pub fn spawn_player(mut commands: Commands) {
     commands
         .spawn((
             Player {
@@ -45,21 +44,14 @@ pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
             Ccd { enabled: true },
         ))
         .with_children(|c| {
-            c.spawn((
-                Camera3dBundle {
-                    projection: Projection::Perspective(PerspectiveProjection {
-                        fov: PI / 2.0,
-                        ..default()
-                    }),
-                    transform: Transform::from_translation(Vec3::Y).looking_at(Vec3::X, Vec3::Y),
+            c.spawn((Camera3dBundle {
+                projection: Projection::Perspective(PerspectiveProjection {
+                    fov: PI / 2.0,
                     ..default()
-                },
-                // https://jaxry.github.io/panorama-to-cubemap/
-                // https://www.imgonline.com.ua/eng/cut-photo-into-pieces.php
-                // toktx --cubemap --t2 sky.ktx2 right.jpg left.jpg top.jpg bottom.jpg front.jpg back.jpg
-                // toktx --cubemap --t2 sky.ktx2 px.png nx.png py.png ny.png pz.png nz.png
-                Skybox(asset_server.load("cloud1.ktx2")),
-            ));
+                }),
+                transform: Transform::from_translation(Vec3::Y).looking_at(Vec3::X, Vec3::Y),
+                ..default()
+            },));
         });
 }
 
@@ -228,7 +220,7 @@ pub fn player_hover_platform(
 }
 
 pub fn respawn(
-    mut game: ResMut<Game>,
+    game: ResMut<Game>,
     mut commands: Commands,
     mut player: Query<(&mut Player, &mut Transform), With<Player>>,
     mut camera: Query<&mut Transform, (With<Camera3d>, Without<Player>)>,
@@ -242,9 +234,6 @@ pub fn respawn(
         for entity in platforms.iter() {
             commands.entity(entity).despawn_recursive();
         }
-
-        game.points = 0;
-        game.next_platform_position = Vec3::ZERO;
 
         let mut camera_transform = camera.single_mut();
         camera_transform.look_at(Vec3::X, Vec3::Y);
