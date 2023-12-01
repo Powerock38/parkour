@@ -41,6 +41,7 @@ fn main() {
                 respawn,
                 force_respawn,
                 update_moving_platforms,
+                check_skybox_loaded,
             ),
         );
 

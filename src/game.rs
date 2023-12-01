@@ -1,4 +1,4 @@
-use bevy::{core_pipeline::Skybox, ecs::system::SystemId, prelude::*};
+use bevy::{asset::LoadState, core_pipeline::Skybox, ecs::system::SystemId, prelude::*};
 
 const NB_PLATFORMS_INIT: u32 = 10;
 
@@ -73,6 +73,9 @@ pub fn update_hud(game: Res<Game>, mut query: Query<&mut Text, With<Label>>) {
     text.sections[0].value = format!("Score: {}", game.points);
 }
 
+#[derive(Component)]
+pub struct SkyboxChange(Handle<Image>);
+
 pub fn change_skybox(
     game: Res<Game>,
     mut commands: Commands,
@@ -82,5 +85,19 @@ pub fn change_skybox(
     let camera = entity.single();
     commands
         .entity(camera)
-        .insert(Skybox(assets_server.load(game.skybox)));
+        .insert(SkyboxChange(assets_server.load(game.skybox)));
+}
+
+pub fn check_skybox_loaded(
+    assets_server: Res<AssetServer>,
+    query: Query<(Entity, Option<&SkyboxChange>), With<Camera3d>>,
+    mut commands: Commands,
+) {
+    let (entity, skybox_change) = query.single();
+    if let Some(SkyboxChange(handle)) = skybox_change {
+        if assets_server.load_state(handle) == LoadState::Loaded {
+            commands.entity(entity).remove::<SkyboxChange>();
+            commands.entity(entity).insert(Skybox(handle.clone()));
+        }
+    }
 }
