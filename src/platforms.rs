@@ -5,7 +5,7 @@ use rand::{seq::SliceRandom, Rng};
 use crate::game::{Game, SKYBOXES, SKYBOX_CHANGE_CHANCE};
 
 const PLATFORM_SIZE: f32 = 3.0;
-const PLATFORM_SPACING: f32 = 5.5;
+const PLATFORM_SPACING: f32 = 7.0;
 
 const DIRECTION_BIAS_HORIZONTAL_CHANCE: f64 = 0.1;
 const DIRECTION_BIAS_VERTICAL_CHANCE: f64 = 0.1;
@@ -48,15 +48,10 @@ pub fn spawn_platform(
     // Small chance to update direction bias
     if rng.gen_bool(DIRECTION_BIAS_HORIZONTAL_CHANCE) {
         game.direction_bias_horizontal = rng.gen_range(0.0..1.0);
-        println!(
-            "direction_bias.horizontal: {}",
-            game.direction_bias_horizontal
-        );
     }
 
     if rng.gen_bool(DIRECTION_BIAS_VERTICAL_CHANCE) {
         game.direction_bias_vertical = rng.gen_range(0.0..1.0);
-        println!("direction_bias.vertical: {}", game.direction_bias_vertical);
     }
 
     // Position
@@ -91,7 +86,7 @@ pub fn spawn_platform(
             mesh,
             material: materials.add(Color::rgb(rng.gen(), rng.gen(), rng.gen()).into()),
             transform: Transform::from_translation(position)
-                .looking_at(game.previous_platform_position, Vec3::Y),
+                .looking_at(game.next_platform_position, Vec3::Y),
             ..default()
         },
         Platform,
@@ -108,8 +103,6 @@ pub fn spawn_platform(
             z: position.z,
         });
     }
-
-    game.previous_platform_position = position;
 }
 
 pub fn update_moving_platforms(

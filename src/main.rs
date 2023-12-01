@@ -4,7 +4,6 @@ use bevy_wasm_window_resize::WindowResizePlugin;
 mod game;
 mod platforms;
 mod player;
-mod utils;
 
 use bevy_rapier3d::plugin::{NoUserData, RapierPhysicsPlugin};
 use game::*;
@@ -55,7 +54,6 @@ fn main() {
         update_hud_system,
         spawn_platform_system,
         next_platform_position: Vec3::ZERO,
-        previous_platform_position: Vec3::ZERO,
         direction_bias_horizontal: 0.0,
         direction_bias_vertical: 0.0,
         skybox: SKYBOXES[0],

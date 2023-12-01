@@ -4,6 +4,7 @@ const NB_PLATFORMS_INIT: u32 = 10;
 
 // https://jaxry.github.io/panorama-to-cubemap/
 // https://www.imgonline.com.ua/eng/cut-photo-into-pieces.php
+// https://sora.ws/gltf/
 // toktx --cubemap --t2 sky.ktx2 right.jpg left.jpg top.jpg bottom.jpg front.jpg back.jpg
 // toktx --cubemap --t2 sky.ktx2 px.png nx.png py.png ny.png pz.png nz.png
 pub const SKYBOXES: &[&str] = &[
@@ -25,7 +26,6 @@ pub struct Game {
     pub update_hud_system: SystemId,
     pub spawn_platform_system: SystemId,
     pub next_platform_position: Vec3,
-    pub previous_platform_position: Vec3,
     pub direction_bias_horizontal: f64,
     pub direction_bias_vertical: f64,
 }
@@ -40,7 +40,6 @@ pub fn init_game(mut commands: Commands, mut game: ResMut<Game>) {
     game.started = false;
     game.points = 0;
     game.next_platform_position = Vec3::ZERO;
-    game.previous_platform_position = Vec3::ZERO;
     game.direction_bias_horizontal = 0.0;
     game.direction_bias_vertical = 0.0;
 
