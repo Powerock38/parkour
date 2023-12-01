@@ -17,10 +17,9 @@ const JUMP_BOOST_MIN_TIME: f32 = 0.15;
 const JUMP_BOOST_SPEED: f32 = 10.0;
 
 const SPEED: f32 = 5.0;
-const SPEED_MIN: f32 = 0.2;
-
-const CAMERA_ROTATION_LERP: f32 = 0.97;
 const DIRECTION_LERP: f32 = 0.9;
+
+const CAMERA_ROTATION_SPEED: f32 = 2.0;
 
 #[derive(Component)]
 pub struct Player {
@@ -142,10 +141,9 @@ pub fn player_movement(
     let next_untouched_position = next_untouched.unwrap_or(game.next_platform_position);
 
     // get the 2d direction towards the platform, normalized
-    let mut direction_2d =
-        (next_untouched_position.xz() - player_transform.translation.xz()).normalize();
-    direction_2d.x = direction_2d.x.max(SPEED_MIN); // cap the minimum speed
-    direction_2d = direction_2d.lerp(player.last_direction_2d, DIRECTION_LERP); // smooth the direction change
+    let direction_2d = (next_untouched_position.xz() - player_transform.translation.xz())
+        .normalize()
+        .lerp(player.last_direction_2d, DIRECTION_LERP); // smooth the direction change
 
     player.last_direction_2d = direction_2d;
 
@@ -158,6 +156,7 @@ pub fn player_movement(
 }
 
 pub fn camera_rotation(
+    time: Res<Time>,
     game: Res<Game>,
     mut camera: Query<(&mut Transform, &GlobalTransform), With<Camera3d>>,
     platforms_unhovered: Query<&Transform, (With<Platform>, Without<Hovered>, Without<Camera3d>)>,
@@ -192,8 +191,10 @@ pub fn camera_rotation(
     let up = back.cross(right);
     let rotation = Quat::from_mat3(&Mat3::from_cols(right, up, back));
 
-    // Spherical interpolation
-    camera_transform.rotation = rotation.slerp(camera_transform.rotation, CAMERA_ROTATION_LERP);
+    // frame-independent lerp
+    camera_transform.rotation = camera_transform
+        .rotation
+        .lerp(rotation, CAMERA_ROTATION_SPEED * time.delta_seconds());
 }
 
 pub fn player_touch_platform(

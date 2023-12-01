@@ -4,11 +4,19 @@ use rand::{seq::SliceRandom, Rng};
 
 use crate::game::{Game, SKYBOXES, SKYBOX_CHANGE_CHANCE};
 
-const PLATFORM_SIZE: f32 = 3.0;
-const PLATFORM_SPACING: f32 = 7.0;
+const PLATFORM_SIZE: f32 = 2.0;
+const PLATFORM_SPACING_MIN: f32 = 5.0;
+const PLATFORM_SPACING_MAX: f32 = 9.0;
 
 const DIRECTION_BIAS_HORIZONTAL_CHANCE: f64 = 0.1;
 const DIRECTION_BIAS_VERTICAL_CHANCE: f64 = 0.1;
+
+const VERTICAL_VARIATION_UP: f32 = 3.0;
+const VERTICAL_VARIATION_DOWN: f32 = 8.0;
+const HORIZONTAL_VARIATION: f32 = 8.0;
+
+const MOVING_PLATFORM_CHANCE_MIN: f64 = 0.1;
+const MOVING_PLATFORM_CHANCE_MAX: f64 = 0.5;
 
 #[derive(Component)]
 pub struct Platform;
@@ -56,23 +64,23 @@ pub fn spawn_platform(
 
     // Position
     let next_platform_z = if rng.gen_bool(game.direction_bias_horizontal) {
-        rng.gen_range(-5.0..0.0)
+        rng.gen_range(-HORIZONTAL_VARIATION..0.0)
     } else {
-        rng.gen_range(0.0..5.0)
+        rng.gen_range(0.0..HORIZONTAL_VARIATION)
     };
 
     let next_platform_y = if rng.gen_bool(game.direction_bias_vertical) {
-        rng.gen_range(-5.0..0.0)
+        rng.gen_range(-VERTICAL_VARIATION_DOWN..0.0)
     } else {
-        rng.gen_range(0.0..2.0)
+        rng.gen_range(0.0..VERTICAL_VARIATION_UP)
     };
 
     let position = game.next_platform_position;
-    let mut next_platform_spacing = PLATFORM_SPACING * (game.difficulty() + 1.0);
+    let mut next_platform_spacing = rng.gen_range(PLATFORM_SPACING_MIN..PLATFORM_SPACING_MAX);
 
     // bigger gap if we are going down
     if position.y > next_platform_y + 4.0 {
-        next_platform_spacing = rng.gen_range(PLATFORM_SPACING..PLATFORM_SPACING * 2.0)
+        next_platform_spacing *= 1.0 + rng.gen_range(0.0..0.2);
     }
 
     // Set next platform position
@@ -95,8 +103,10 @@ pub fn spawn_platform(
     ));
 
     // Chance to be a moving platform
-    let moving_platform_chance = game.difficulty().min(0.5);
-    if rng.gen_bool(moving_platform_chance as f64) {
+    let moving_platform_chance =
+        (game.difficulty() as f64 + MOVING_PLATFORM_CHANCE_MIN).min(MOVING_PLATFORM_CHANCE_MAX);
+
+    if rng.gen_bool(moving_platform_chance) {
         c.insert(MovingPlatform {
             progress: rng.gen_range(-1.0..1.0),
             going_negative: rng.gen_bool(0.5),
@@ -107,13 +117,16 @@ pub fn spawn_platform(
 
 pub fn update_moving_platforms(
     time: Res<Time>,
+    game: Res<Game>,
     mut platforms_transforms: Query<(&mut Transform, &mut MovingPlatform)>,
 ) {
+    let speed = (1.0 + game.difficulty() * 2.0).min(5.0);
+
     for (mut transform, mut moving_platform) in platforms_transforms.iter_mut() {
         if moving_platform.going_negative {
-            moving_platform.progress -= time.delta_seconds();
+            moving_platform.progress -= speed * time.delta_seconds();
         } else {
-            moving_platform.progress += time.delta_seconds();
+            moving_platform.progress += speed * time.delta_seconds();
         }
 
         if moving_platform.progress > 1.0 {
