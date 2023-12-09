@@ -5,6 +5,7 @@ wasm-bindgen --out-dir . --target web ./target/wasm32-unknown-unknown/release/pa
 
 git stash --include-untracked
 git checkout web
+rm -rf assets/
 git checkout main -- assets/
 rm parkour_bg.wasm parkour_bg.wasm.d.ts parkour.d.ts parkour.js
 git stash pop
