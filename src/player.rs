@@ -3,13 +3,15 @@ use bevy_rapier3d::prelude::*;
 use std::f32::consts::PI;
 
 use crate::{
-    game::{init_game, Game},
-    platforms::{Hovered, Platform, Touched},
+    game::Game,
+    platforms::{Hovered, Platform, Touched, TOUCHED_PLATFORM_TTL},
 };
 
-const SPAWN_POINT: Vec3 = Vec3::new(-3.0, 5.0, 0.0);
+pub const SPAWN_POINT: Vec3 = Vec3::new(-5.0, 5.0, 0.0);
 
 const GRAVITY: f32 = -9.81;
+
+const COYOTE_TIME: f32 = 0.2;
 
 const JUMP: f32 = 5.5;
 const JUMP_BOOST_DURATION: f32 = 0.6;
@@ -23,9 +25,10 @@ const CAMERA_ROTATION_SPEED: f32 = 2.0;
 
 #[derive(Component)]
 pub struct Player {
+    coyote_time: Timer,
     jump_pressed: bool,
     jump_boost_duration: Timer,
-    velocity_y: f32,
+    pub velocity_y: f32,
     last_direction_2d: Vec2,
 }
 
@@ -33,6 +36,7 @@ pub fn spawn_player(mut commands: Commands) {
     commands
         .spawn((
             Player {
+                coyote_time: Timer::from_seconds(COYOTE_TIME, TimerMode::Once),
                 jump_pressed: false,
                 jump_boost_duration: Timer::from_seconds(
                     JUMP_BOOST_DURATION + JUMP_BOOST_MIN_TIME,
@@ -100,10 +104,15 @@ pub fn player_movement(
     }
 
     // Jump & Gravity
-    // FIXME: not grounded on steep descending slopes
     let is_grounded = controller_output.map(|o| o.grounded).unwrap_or(false);
 
     if is_grounded {
+        player.coyote_time.reset();
+    }
+
+    let is_grounded_coyote = is_grounded || !player.coyote_time.tick(time.delta()).finished();
+
+    if is_grounded_coyote {
         player.velocity_y = 0.0;
 
         if player.jump_pressed {
@@ -211,7 +220,10 @@ pub fn player_touch_platform(
 
     if let Some((entity, _)) = rapier_context.cast_ray(pos, -Vec3::Y, 2.0, true, filter) {
         if platforms.contains(entity) {
-            commands.entity(entity).insert(Touched);
+            commands.entity(entity).insert(Touched(Timer::from_seconds(
+                TOUCHED_PLATFORM_TTL,
+                TimerMode::Once,
+            )));
             game.points += 1;
             commands.run_system(game.update_hud_system);
             commands.run_system(game.spawn_platform_system);
@@ -234,39 +246,5 @@ pub fn player_hover_platform(
         if platforms.contains(entity) {
             commands.entity(entity).insert(Hovered);
         }
-    }
-}
-
-pub fn respawn(
-    game: ResMut<Game>,
-    mut commands: Commands,
-    mut player: Query<(&mut Player, &mut Transform), With<Player>>,
-    mut camera: Query<&mut Transform, (With<Camera3d>, Without<Player>)>,
-    platforms: Query<Entity, With<Platform>>,
-) {
-    let (mut player, mut transform) = player.single_mut();
-    if player.velocity_y < -20.0 {
-        for entity in platforms.iter() {
-            commands.entity(entity).despawn_recursive();
-        }
-
-        let mut camera_transform = camera.single_mut();
-        camera_transform.look_at(Vec3::X, Vec3::Y);
-
-        player.velocity_y = 0.0;
-        transform.translation = SPAWN_POINT;
-
-        init_game(commands, game);
-    }
-}
-
-pub fn force_respawn(
-    keyboard_input: Res<Input<KeyCode>>,
-    mut player: Query<(&mut Player, &mut Transform)>,
-) {
-    if keyboard_input.just_pressed(KeyCode::R) {
-        let (mut player, mut transform) = player.single_mut();
-        transform.translation.y = -100.0;
-        player.velocity_y = -100.0;
     }
 }

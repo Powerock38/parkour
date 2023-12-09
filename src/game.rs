@@ -1,26 +1,16 @@
-use bevy::{asset::LoadState, core_pipeline::Skybox, ecs::system::SystemId, prelude::*};
+use bevy::{ecs::system::SystemId, gltf::Gltf, prelude::*};
+
+use crate::{
+    platforms::Platform,
+    player::{Player, SPAWN_POINT},
+};
 
 const NB_PLATFORMS_INIT: u32 = 10;
 
-// https://jaxry.github.io/panorama-to-cubemap/
-// https://www.imgonline.com.ua/eng/cut-photo-into-pieces.php
-// https://sora.ws/gltf/
-// toktx --cubemap --t2 sky.ktx2 right.jpg left.jpg top.jpg bottom.jpg front.jpg back.jpg
-// toktx --cubemap --t2 sky.ktx2 px.png nx.png py.png ny.png pz.png nz.png
-pub const SKYBOXES: &[&str] = &[
-    "green_explosion.ktx2",
-    "nebula_dark.ktx2",
-    "nebula.ktx2",
-    "orange_sky.ktx2",
-    "blue_sky.ktx2",
-];
-
-pub const SKYBOX_CHANGE_CHANCE: f64 = 0.01;
-
 #[derive(Resource)]
 pub struct Game {
-    pub skybox: &'static str,
-    pub change_skybox_system: SystemId,
+    pub theme_platforms_handles: Vec<Handle<Gltf>>,
+    pub change_theme_system: SystemId,
     pub started: bool,
     pub points: u32,
     pub update_hud_system: SystemId,
@@ -43,12 +33,12 @@ pub fn init_game(mut commands: Commands, mut game: ResMut<Game>) {
     game.direction_bias_horizontal = 0.0;
     game.direction_bias_vertical = 0.0;
 
+    commands.run_system(game.update_hud_system);
+    commands.run_system(game.change_theme_system);
+
     for _ in 0..NB_PLATFORMS_INIT {
         commands.run_system(game.spawn_platform_system);
     }
-
-    commands.run_system(game.update_hud_system);
-    commands.run_system(game.change_skybox_system);
 }
 
 pub fn init_hud(mut commands: Commands) {
@@ -70,34 +60,53 @@ pub fn init_hud(mut commands: Commands) {
 
 pub fn update_hud(game: Res<Game>, mut query: Query<&mut Text, With<Label>>) {
     let mut text = query.single_mut();
-    text.sections[0].value = format!("Score: {}", game.points);
+    if game.points == 0 {
+        text.sections[0].value = "JUMP TO START".to_string();
+    } else {
+        text.sections[0].value = format!("Score: {}", game.points);
+    }
 }
 
-#[derive(Component)]
-pub struct SkyboxChange(Handle<Image>);
-
-pub fn change_skybox(
-    game: Res<Game>,
+pub fn reset(
+    game: ResMut<Game>,
     mut commands: Commands,
-    assets_server: Res<AssetServer>,
-    entity: Query<Entity, With<Camera3d>>,
+    mut player: Query<(&mut Player, &mut Transform), With<Player>>,
+    mut camera: Query<&mut Transform, (With<Camera3d>, Without<Player>)>,
+    platforms: Query<Entity, With<Platform>>,
 ) {
-    let camera = entity.single();
-    commands
-        .entity(camera)
-        .insert(SkyboxChange(assets_server.load(game.skybox)));
-}
-
-pub fn check_skybox_loaded(
-    assets_server: Res<AssetServer>,
-    query: Query<(Entity, Option<&SkyboxChange>), With<Camera3d>>,
-    mut commands: Commands,
-) {
-    let (entity, skybox_change) = query.single();
-    if let Some(SkyboxChange(handle)) = skybox_change {
-        if assets_server.load_state(handle) == LoadState::Loaded {
-            commands.entity(entity).remove::<SkyboxChange>();
-            commands.entity(entity).insert(Skybox(handle.clone()));
+    let (mut player, mut transform) = player.single_mut();
+    if player.velocity_y < -20.0 {
+        for entity in platforms.iter() {
+            commands.entity(entity).despawn_recursive();
         }
+
+        let mut camera_transform = camera.single_mut();
+        camera_transform.look_at(Vec3::X, Vec3::Y);
+
+        player.velocity_y = 0.0;
+        transform.translation = SPAWN_POINT;
+
+        init_game(commands, game);
+    }
+}
+
+pub fn force_respawn(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut player: Query<(&mut Player, &mut Transform)>,
+) {
+    if keyboard_input.just_pressed(KeyCode::R) {
+        let (mut player, mut transform) = player.single_mut();
+        transform.translation.y = -100.0;
+        player.velocity_y = -100.0;
+    }
+}
+
+pub fn force_theme_change(
+    mut commands: Commands,
+    keyboard_input: Res<Input<KeyCode>>,
+    game: Res<Game>,
+) {
+    if keyboard_input.just_pressed(KeyCode::T) {
+        commands.run_system(game.change_theme_system);
     }
 }
