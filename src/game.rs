@@ -1,4 +1,4 @@
-use bevy::{ecs::system::SystemId, gltf::Gltf, prelude::*};
+use bevy::{ecs::system::SystemId, prelude::*};
 
 use crate::{
     platforms::Platform,
@@ -9,8 +9,6 @@ const NB_PLATFORMS_INIT: u32 = 10;
 
 #[derive(Resource)]
 pub struct Game {
-    pub theme_platforms_handles: Vec<Handle<Gltf>>,
-    pub change_theme_system: SystemId,
     pub started: bool,
     pub points: u32,
     pub update_hud_system: SystemId,
@@ -34,7 +32,6 @@ pub fn init_game(mut commands: Commands, mut game: ResMut<Game>) {
     game.direction_bias_vertical = 0.0;
 
     commands.run_system(game.update_hud_system);
-    commands.run_system(game.change_theme_system);
 
     for _ in 0..NB_PLATFORMS_INIT {
         commands.run_system(game.spawn_platform_system);
@@ -44,7 +41,7 @@ pub fn init_game(mut commands: Commands, mut game: ResMut<Game>) {
 pub fn init_hud(mut commands: Commands) {
     commands.spawn((
         TextBundle::from_section(
-            "Text Example",
+            "Loading...",
             TextStyle {
                 font_size: 30.0,
                 ..default()
@@ -87,26 +84,5 @@ pub fn reset(
         transform.translation = SPAWN_POINT;
 
         init_game(commands, game);
-    }
-}
-
-pub fn force_respawn(
-    keyboard_input: Res<Input<KeyCode>>,
-    mut player: Query<(&mut Player, &mut Transform)>,
-) {
-    if keyboard_input.just_pressed(KeyCode::R) {
-        let (mut player, mut transform) = player.single_mut();
-        transform.translation.y = -100.0;
-        player.velocity_y = -100.0;
-    }
-}
-
-pub fn force_theme_change(
-    mut commands: Commands,
-    keyboard_input: Res<Input<KeyCode>>,
-    game: Res<Game>,
-) {
-    if keyboard_input.just_pressed(KeyCode::T) {
-        commands.run_system(game.change_theme_system);
     }
 }

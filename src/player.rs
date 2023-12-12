@@ -1,10 +1,14 @@
-use bevy::prelude::*;
+use bevy::{
+    pbr::{NotShadowCaster, NotShadowReceiver},
+    prelude::*,
+};
 use bevy_rapier3d::prelude::*;
 use std::f32::consts::PI;
 
 use crate::{
     game::Game,
     platforms::{Hovered, Platform, Touched, TOUCHED_PLATFORM_TTL},
+    skybox::{generate_skybox_mesh, SkyboxCustom, SkyboxCustomMaterial},
 };
 
 pub const SPAWN_POINT: Vec3 = Vec3::new(-5.0, 5.0, 0.0);
@@ -32,7 +36,7 @@ pub struct Player {
     last_direction_2d: Vec2,
 }
 
-pub fn spawn_player(mut commands: Commands) {
+pub fn spawn_player(mut commands: Commands, mut mesh_assets: ResMut<Assets<Mesh>>) {
     commands
         .spawn((
             Player {
@@ -53,16 +57,37 @@ pub fn spawn_player(mut commands: Commands) {
             },
             TransformBundle::from_transform(Transform::from_translation(SPAWN_POINT)),
             Ccd { enabled: true },
+            VisibilityBundle {
+                visibility: Visibility::Visible,
+                ..default()
+            },
         ))
         .with_children(|c| {
-            c.spawn((Camera3dBundle {
-                projection: Projection::Perspective(PerspectiveProjection {
-                    fov: PI / 2.0,
+            c.spawn((
+                Camera3dBundle {
+                    projection: Projection::Perspective(PerspectiveProjection {
+                        fov: PI / 2.0,
+                        ..default()
+                    }),
+                    transform: Transform::from_translation(Vec3::Y).looking_at(Vec3::X, Vec3::Y),
                     ..default()
-                }),
-                transform: Transform::from_translation(Vec3::Y).looking_at(Vec3::X, Vec3::Y),
-                ..default()
-            },));
+                },
+                VisibilityBundle {
+                    visibility: Visibility::Visible,
+                    ..default()
+                },
+            ))
+            .with_children(|c| {
+                c.spawn((
+                    SkyboxCustom,
+                    MaterialMeshBundle::<SkyboxCustomMaterial> {
+                        mesh: mesh_assets.add(generate_skybox_mesh()),
+                        ..default()
+                    },
+                    NotShadowCaster,
+                    NotShadowReceiver,
+                ));
+            });
         });
 }
 
@@ -246,5 +271,16 @@ pub fn player_hover_platform(
         if platforms.contains(entity) {
             commands.entity(entity).insert(Hovered);
         }
+    }
+}
+
+pub fn force_respawn(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut player: Query<(&mut Player, &mut Transform)>,
+) {
+    if keyboard_input.just_pressed(KeyCode::R) {
+        let (mut player, mut transform) = player.single_mut();
+        transform.translation.y = -100.0;
+        player.velocity_y = -100.0;
     }
 }

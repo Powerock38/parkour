@@ -6,7 +6,10 @@ use bevy_rapier3d::prelude::*;
 use rand::{seq::SliceRandom, Rng};
 use std::f32::consts::PI;
 
-use crate::{game::Game, theme::THEME_CHANGE_CHANCE};
+use crate::{
+    game::Game,
+    theme::{ThemeChangeSystem, ThemeCurrent, THEME_CHANGE_CHANCE},
+};
 
 const PLATFORM_SPACING_MIN: f32 = 5.0;
 const PLATFORM_SPACING_MAX: f32 = 9.0;
@@ -45,22 +48,23 @@ pub struct GltfLoader {
     transform: Transform,
 }
 
-pub fn spawn_platform(mut game: ResMut<Game>, mut commands: Commands) {
+pub fn spawn_platform(
+    mut commands: Commands,
+    mut game: ResMut<Game>,
+    theme: Res<ThemeCurrent>,
+    theme_change_system: Res<ThemeChangeSystem>,
+) {
     let mut rng = rand::thread_rng();
 
     // Small chance to change current theme
     if rng.gen_bool(THEME_CHANGE_CHANCE) {
-        commands.run_system(game.change_theme_system);
+        commands.run_system(theme_change_system.0);
     }
 
     // Platform mesh
     let size = (1.0 - game.difficulty()) * rng.gen_range(0.8..1.2);
 
-    let handle = game
-        .theme_platforms_handles
-        .choose(&mut rng)
-        .unwrap()
-        .clone();
+    let handle = theme.theme.platforms.choose(&mut rng).unwrap().clone();
 
     // Small chance to update direction bias
     if rng.gen_bool(DIRECTION_BIAS_HORIZONTAL_CHANCE) {

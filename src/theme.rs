@@ -1,7 +1,10 @@
-use bevy::{asset::LoadState, core_pipeline::Skybox, gltf::Gltf, prelude::*};
+use bevy::{asset::LoadState, ecs::system::SystemId, gltf::Gltf, prelude::*};
 use rand::seq::SliceRandom;
 
-use crate::game::Game;
+use crate::{
+    skybox::{SkyboxCustom, SkyboxCustomMaterial},
+    AppState,
+};
 
 // https://jaxry.github.io/panorama-to-cubemap/
 // https://www.imgonline.com.ua/eng/cut-photo-into-pieces.php
@@ -12,12 +15,14 @@ use crate::game::Game;
 pub const THEME_CHANGE_CHANCE: f64 = 0.01;
 
 pub struct Theme {
+    pub id: &'static str,
     pub skybox: &'static str,
     pub platforms: &'static [&'static str],
 }
 
 pub const THEMES: &[Theme] = &[
     Theme {
+        id: "heaven",
         skybox: "green_explosion.ktx2",
         platforms: &[
             "ground1.glb",
@@ -32,6 +37,7 @@ pub const THEMES: &[Theme] = &[
         ],
     },
     Theme {
+        id: "space",
         skybox: "nebula_dark.ktx2",
         platforms: &[
             "asteroid1.glb",
@@ -59,59 +65,111 @@ pub const THEMES: &[Theme] = &[
     // },
 ];
 
-#[derive(Resource)]
-pub struct ThemeChange {
+#[derive(Clone)]
+pub struct ThemeLoad {
+    pub id: &'static str,
     pub skybox: Handle<Image>,
     pub platforms: Vec<Handle<Gltf>>,
+}
+
+#[derive(Resource)]
+pub struct ThemeCurrent {
+    pub theme: ThemeLoad,
+}
+
+#[derive(Resource)]
+pub struct ThemeChangeSystem(pub SystemId);
+
+#[derive(Resource)]
+pub struct ThemeChange {
+    pub theme: ThemeLoad,
 }
 
 pub fn change_theme(
     mut commands: Commands,
     assets_server: Res<AssetServer>,
-    mut game: ResMut<Game>,
+    theme_current: Option<Res<ThemeCurrent>>,
 ) {
     let mut rng = rand::thread_rng();
 
-    let theme = THEMES.choose(&mut rng).unwrap();
-    println!("new theme: skybox: {:?}", theme.skybox);
+    let themes = THEMES
+        .iter()
+        .filter(|theme| {
+            theme_current
+                .as_ref()
+                .map(|theme_current| theme_current.theme.id != theme.id)
+                .unwrap_or(true)
+        })
+        .collect::<Vec<_>>();
 
-    let theme_change = ThemeChange {
-        skybox: assets_server.load(format!("skyboxes/{}", theme.skybox)),
-        platforms: theme
-            .platforms
-            .iter()
-            .map(|path| assets_server.load(format!("platforms/{}", path)))
-            .collect(),
-    };
+    let theme = themes.choose(&mut rng).unwrap();
+    println!("loading theme with skybox: {:?}", theme.skybox);
 
-    if game.theme_platforms_handles.is_empty() {
-        game.theme_platforms_handles = theme_change.platforms.clone();
-    }
-
-    commands.insert_resource(theme_change);
+    commands.insert_resource(ThemeChange {
+        theme: ThemeLoad {
+            id: theme.id,
+            skybox: assets_server.load(format!("skyboxes/{}", theme.skybox)),
+            platforms: theme
+                .platforms
+                .iter()
+                .map(|path| assets_server.load(format!("platforms/{}", path)))
+                .collect(),
+        },
+    });
 }
 
 pub fn apply_loaded_theme(
     mut commands: Commands,
+    time: Res<Time>,
     assets_server: Res<AssetServer>,
-    camera: Query<Entity, With<Camera3d>>,
+    current_state: Res<State<AppState>>,
+    mut next_state: ResMut<NextState<AppState>>,
+    theme_current: Option<Res<ThemeCurrent>>,
     theme_change: Option<Res<ThemeChange>>,
-    mut game: ResMut<Game>,
+    skybox_entity: Query<Entity, With<SkyboxCustom>>,
+    mut skybox_materials: ResMut<Assets<SkyboxCustomMaterial>>,
 ) {
     if let Some(theme_change) = theme_change {
         let fully_loaded = theme_change
+            .theme
             .platforms
             .iter()
             .all(|handle| assets_server.load_state(handle) == LoadState::Loaded)
-            && assets_server.load_state(&theme_change.skybox) == LoadState::Loaded;
+            && assets_server.load_state(&theme_change.theme.skybox) == LoadState::Loaded;
 
         if fully_loaded {
+            let sky_texture1 = theme_change.theme.skybox.clone();
+            let sky_texture2 = theme_current
+                .map(|theme_current| theme_current.theme.skybox.clone())
+                .unwrap_or(sky_texture1.clone());
+
             commands
-                .entity(camera.single())
-                .insert(Skybox(theme_change.skybox.clone()));
-            game.theme_platforms_handles = theme_change.platforms.clone();
+                .entity(skybox_entity.single())
+                .insert(skybox_materials.add(SkyboxCustomMaterial {
+                    time_t0: time.elapsed_seconds(),
+                    sky_texture1,
+                    sky_texture2,
+                }));
+
+            commands.insert_resource(ThemeCurrent {
+                theme: theme_change.theme.clone(),
+            });
 
             commands.remove_resource::<ThemeChange>();
+
+            if let AppState::Loading = current_state.get() {
+                next_state.set(AppState::Game);
+            }
         }
+    }
+}
+
+pub fn force_theme_change(
+    mut commands: Commands,
+    keyboard_input: Res<Input<KeyCode>>,
+    theme_change_system: Res<ThemeChangeSystem>,
+) {
+    if keyboard_input.just_pressed(KeyCode::T) {
+        commands.run_system(theme_change_system.0);
     }
 }
