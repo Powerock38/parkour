@@ -10,11 +10,13 @@ use bevy::{
 #[derive(Component)]
 pub struct SkyboxCustom;
 
-#[derive(AsBindGroup, TypeUuid, TypePath, Debug, Clone, Asset)]
+#[derive(AsBindGroup, TypeUuid, TypePath, Debug, Clone, Asset, Default)]
 #[uuid = "3e5bbf04-bf02-4b74-97f5-ea9c94ca3235"]
 pub struct SkyboxCustomMaterial {
     #[uniform(0)]
     pub time_t0: f32,
+    #[cfg(target_arch = "wasm32")]
+    pub _wasm_padding: Vec3,
 
     #[texture(1, dimension = "cube")]
     #[sampler(2)]
