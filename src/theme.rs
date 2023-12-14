@@ -138,15 +138,19 @@ pub fn apply_loaded_theme(
             && assets_server.load_state(&theme_change.theme.skybox) == LoadState::Loaded;
 
         if fully_loaded {
+            let mut time_t0 = time.elapsed_seconds_wrapped();
             let sky_texture1 = theme_change.theme.skybox.clone();
             let sky_texture2 = theme_current
                 .map(|theme_current| theme_current.theme.skybox.clone())
-                .unwrap_or(sky_texture1.clone());
+                .unwrap_or_else(|| {
+                    time_t0 += 30.0; // prevent shader from running for nothing when tex1 == tex2
+                    sky_texture1.clone()
+                });
 
             commands
                 .entity(skybox_entity.single())
                 .insert(skybox_materials.add(SkyboxCustomMaterial {
-                    time_t0: time.elapsed_seconds(),
+                    time_t0,
                     sky_texture1,
                     sky_texture2,
                 }));

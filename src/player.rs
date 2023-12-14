@@ -63,31 +63,24 @@ pub fn spawn_player(mut commands: Commands, mut mesh_assets: ResMut<Assets<Mesh>
             },
         ))
         .with_children(|c| {
+            c.spawn((Camera3dBundle {
+                projection: Projection::Perspective(PerspectiveProjection {
+                    fov: PI / 2.0,
+                    ..default()
+                }),
+                transform: Transform::from_translation(Vec3::Y).looking_at(Vec3::X, Vec3::Y),
+                ..default()
+            },));
+
             c.spawn((
-                Camera3dBundle {
-                    projection: Projection::Perspective(PerspectiveProjection {
-                        fov: PI / 2.0,
-                        ..default()
-                    }),
-                    transform: Transform::from_translation(Vec3::Y).looking_at(Vec3::X, Vec3::Y),
+                SkyboxCustom,
+                MaterialMeshBundle::<SkyboxCustomMaterial> {
+                    mesh: mesh_assets.add(generate_skybox_mesh()),
                     ..default()
                 },
-                VisibilityBundle {
-                    visibility: Visibility::Visible,
-                    ..default()
-                },
-            ))
-            .with_children(|c| {
-                c.spawn((
-                    SkyboxCustom,
-                    MaterialMeshBundle::<SkyboxCustomMaterial> {
-                        mesh: mesh_assets.add(generate_skybox_mesh()),
-                        ..default()
-                    },
-                    NotShadowCaster,
-                    NotShadowReceiver,
-                ));
-            });
+                NotShadowCaster,
+                NotShadowReceiver,
+            ));
         });
 }
 

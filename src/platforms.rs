@@ -8,7 +8,7 @@ use std::f32::consts::PI;
 
 use crate::{
     game::Game,
-    theme::{ThemeChangeSystem, ThemeCurrent, THEME_CHANGE_CHANCE},
+    theme::{ThemeChange, ThemeChangeSystem, ThemeCurrent, THEME_CHANGE_CHANCE},
 };
 
 const PLATFORM_SPACING_MIN: f32 = 5.0;
@@ -51,20 +51,26 @@ pub struct GltfLoader {
 pub fn spawn_platform(
     mut commands: Commands,
     mut game: ResMut<Game>,
-    theme: Res<ThemeCurrent>,
+    theme_current: Res<ThemeCurrent>,
+    theme_change: Option<Res<ThemeChange>>,
     theme_change_system: Res<ThemeChangeSystem>,
 ) {
     let mut rng = rand::thread_rng();
 
-    // Small chance to change current theme
-    if rng.gen_bool(THEME_CHANGE_CHANCE) {
+    // Small chance to change current theme if not already changing
+    if theme_change.is_none() && rng.gen_bool(THEME_CHANGE_CHANCE) {
         commands.run_system(theme_change_system.0);
     }
 
     // Platform mesh
     let size = (1.0 - game.difficulty()) * rng.gen_range(0.8..1.2);
 
-    let handle = theme.theme.platforms.choose(&mut rng).unwrap().clone();
+    let handle = theme_current
+        .theme
+        .platforms
+        .choose(&mut rng)
+        .unwrap()
+        .clone();
 
     // Small chance to update direction bias
     if rng.gen_bool(DIRECTION_BIAS_HORIZONTAL_CHANCE) {
