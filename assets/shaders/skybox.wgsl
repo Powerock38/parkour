@@ -7,6 +7,7 @@ const DURATION: f32 = 20.0;
 
 struct SkyboxCustomMaterial {
     time_t0: f32,
+    _wasm_padding: vec3<f32>,
 }
 
 @group(1) @binding(0)
