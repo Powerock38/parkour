@@ -153,7 +153,6 @@ pub fn apply_loaded_theme(
                     time_t0,
                     sky_texture1,
                     sky_texture2,
-                    ..default()
                 }));
 
             commands.insert_resource(ThemeCurrent {
