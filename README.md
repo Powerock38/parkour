@@ -1,4 +1,4 @@
-# https://powerock38.github.io/parkour/
+# [Parkour!](https://powerock.itch.io/parkour)
 
-- Jump: Space, Tap screen
+- Jump: Space, Click or Tap screen
 - Reset: R
