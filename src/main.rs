@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy_wasm_window_resize::WindowResizePlugin;
 
 mod game;
 mod platforms;
@@ -22,20 +21,31 @@ enum AppState {
 }
 
 fn main() {
-    let mut app = App::new();
-    let app = app
+    App::new()
         .add_plugins((
-            DefaultPlugins,
-            WindowResizePlugin,
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        fit_canvas_to_parent: true,
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(AssetPlugin {
+                    meta_check: bevy::asset::AssetMetaCheck::Never,
+                    ..default()
+                }),
             RapierPhysicsPlugin::<NoUserData>::default(),
             // bevy_rapier3d::render::RapierDebugRenderPlugin::default(),
             MaterialPlugin::<SkyboxCustomMaterial>::default(),
         ))
         .insert_resource(AmbientLight {
             color: Color::WHITE,
-            brightness: 0.5,
+            brightness: 1000.0,
         })
-        .add_state::<AppState>()
+        .init_state::<AppState>()
+        .init_resource::<Game>()
+        .init_resource::<PlatformGeneration>()
         .add_systems(Startup, (spawn_player, init_hud))
         .add_systems(Update, (apply_loaded_theme,))
         .add_systems(OnEnter(AppState::Game), (init_game,))
@@ -52,29 +62,11 @@ fn main() {
                 reset,
                 force_respawn,
                 force_theme_change,
+                update_hud,
             )
                 .run_if(in_state(AppState::Game)),
-        );
-
-    let change_theme_system = app.world.register_system(change_theme);
-
-    let _ = app.world.run_system(change_theme_system);
-
-    app.world
-        .insert_resource(ThemeChangeSystem(change_theme_system));
-
-    let spawn_platform_system = app.world.register_system(spawn_platform);
-    let update_hud_system = app.world.register_system(update_hud);
-
-    app.world.insert_resource(Game {
-        started: false,
-        points: 0,
-        update_hud_system,
-        spawn_platform_system,
-        next_platform_position: Vec3::ZERO,
-        direction_bias_horizontal: 0.0,
-        direction_bias_vertical: 0.0,
-    });
-
-    app.run();
+        )
+        .observe(change_theme)
+        .observe(spawn_platform)
+        .run();
 }

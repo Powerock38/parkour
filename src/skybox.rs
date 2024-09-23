@@ -1,8 +1,8 @@
 use bevy::{
     prelude::*,
-    reflect::TypeUuid,
     render::{
         mesh::Indices,
+        render_asset::RenderAssetUsages,
         render_resource::{AsBindGroup, PrimitiveTopology, ShaderRef},
     },
 };
@@ -10,8 +10,7 @@ use bevy::{
 #[derive(Component)]
 pub struct SkyboxCustom;
 
-#[derive(AsBindGroup, TypeUuid, TypePath, Debug, Clone, Asset)]
-#[uuid = "3e5bbf04-bf02-4b74-97f5-ea9c94ca3235"]
+#[derive(Asset, AsBindGroup, TypePath, Debug, Clone)]
 pub struct SkyboxCustomMaterial {
     #[uniform(0)]
     pub time_t0: f32,
@@ -63,9 +62,11 @@ pub fn generate_skybox_mesh() -> Mesh {
     let positions: Vec<_> = vertices.iter().map(|(p, _)| *p).collect();
     let normals: Vec<_> = vertices.iter().map(|(_, n)| *n).collect();
 
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.set_indices(Some(Indices::U16(indices.to_vec())));
-    mesh
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_indices(Indices::U16(indices.to_vec()))
 }

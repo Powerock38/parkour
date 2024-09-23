@@ -8,7 +8,8 @@ use std::f32::consts::PI;
 
 use crate::{
     game::Game,
-    theme::{ThemeChange, ThemeChangeSystem, ThemeCurrent, THEME_CHANGE_CHANCE},
+    theme::{ThemeChange, ThemeCurrent, THEME_CHANGE_CHANCE},
+    ChangeThemeRandom,
 };
 
 const PLATFORM_SPACING_MIN: f32 = 5.0;
@@ -48,18 +49,29 @@ pub struct GltfLoader {
     transform: Transform,
 }
 
+#[derive(Resource, Default)]
+pub struct PlatformGeneration {
+    pub next_platform_position: Vec3,
+    pub direction_bias_horizontal: f64,
+    pub direction_bias_vertical: f64,
+}
+
+#[derive(Event)]
+pub struct SpawnPlatform;
+
 pub fn spawn_platform(
+    _trigger: Trigger<SpawnPlatform>,
     mut commands: Commands,
-    mut game: ResMut<Game>,
+    mut platform_gen: ResMut<PlatformGeneration>,
+    game: Res<Game>,
     theme_current: Res<ThemeCurrent>,
     theme_change: Option<Res<ThemeChange>>,
-    theme_change_system: Res<ThemeChangeSystem>,
 ) {
     let mut rng = rand::thread_rng();
 
     // Small chance to change current theme if not already changing
     if theme_change.is_none() && rng.gen_bool(THEME_CHANGE_CHANCE) {
-        commands.run_system(theme_change_system.0);
+        commands.trigger(ChangeThemeRandom);
     }
 
     // Platform mesh
@@ -74,27 +86,27 @@ pub fn spawn_platform(
 
     // Small chance to update direction bias
     if rng.gen_bool(DIRECTION_BIAS_HORIZONTAL_CHANCE) {
-        game.direction_bias_horizontal = rng.gen_range(0.0..1.0);
+        platform_gen.direction_bias_horizontal = rng.gen_range(0.0..1.0);
     }
 
     if rng.gen_bool(DIRECTION_BIAS_VERTICAL_CHANCE) {
-        game.direction_bias_vertical = rng.gen_range(0.0..1.0);
+        platform_gen.direction_bias_vertical = rng.gen_range(0.0..1.0);
     }
 
     // Position
-    let next_platform_z = if rng.gen_bool(game.direction_bias_horizontal) {
+    let next_platform_z = if rng.gen_bool(platform_gen.direction_bias_horizontal) {
         rng.gen_range(-HORIZONTAL_VARIATION..0.0)
     } else {
         rng.gen_range(0.0..HORIZONTAL_VARIATION)
     };
 
-    let next_platform_y = if rng.gen_bool(game.direction_bias_vertical) {
+    let next_platform_y = if rng.gen_bool(platform_gen.direction_bias_vertical) {
         rng.gen_range(-VERTICAL_VARIATION_DOWN..0.0)
     } else {
         rng.gen_range(0.0..VERTICAL_VARIATION_UP)
     };
 
-    let position = game.next_platform_position;
+    let position = platform_gen.next_platform_position;
     let mut next_platform_spacing = rng.gen_range(PLATFORM_SPACING_MIN..PLATFORM_SPACING_MAX);
 
     // bigger gap if we are going down
@@ -103,13 +115,13 @@ pub fn spawn_platform(
     }
 
     // Set next platform position
-    game.next_platform_position +=
+    platform_gen.next_platform_position +=
         Vec3::new(rng.gen_range(4.0..8.0), next_platform_y, next_platform_z).normalize()
             * next_platform_spacing;
 
     let mut transform = Transform::from_translation(position)
         .with_scale(Vec3::splat(size))
-        .looking_at(game.next_platform_position, Vec3::Y);
+        .looking_at(platform_gen.next_platform_position, Vec3::Y);
 
     transform.rotate_y(rng.gen_range(0.0..PI * 2.0));
 
@@ -136,7 +148,7 @@ pub fn update_moving_platforms(
 ) {
     let speed = (1.0 + game.difficulty() * 2.0).min(5.0);
 
-    for (mut transform, mut moving_platform) in platforms_transforms.iter_mut() {
+    for (mut transform, mut moving_platform) in &mut platforms_transforms {
         if moving_platform.going_negative {
             moving_platform.progress -= speed * time.delta_seconds();
         } else {
@@ -160,7 +172,7 @@ pub fn delete_touched_platforms(
     mut commands: Commands,
     mut query: Query<(Entity, &mut Touched)>,
 ) {
-    for (entity, mut touched) in query.iter_mut() {
+    for (entity, mut touched) in &mut query {
         if touched.0.tick(time.delta()).finished() {
             commands.entity(entity).despawn_recursive();
         }
@@ -175,7 +187,7 @@ pub fn gltf_compute_colliders(
     gltf_node_assets: Res<Assets<GltfNode>>,
     mesh_assets: Res<Assets<Mesh>>,
 ) {
-    for (gltf_loader, gltf_loader_entity) in query_gltf_loader.iter_mut() {
+    for (gltf_loader, gltf_loader_entity) in &mut query_gltf_loader {
         let gltf = gltf_assets.get(&gltf_loader.handle);
 
         if let Some(gltf) = gltf {

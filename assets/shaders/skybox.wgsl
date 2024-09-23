@@ -1,7 +1,4 @@
-#import bevy_pbr::{
-    mesh_view_bindings::globals,
-    forward_io::VertexOutput,
-}
+#import bevy_pbr::{mesh_view_bindings::globals, forward_io::VertexOutput}
 
 const DURATION: f32 = 20.0;
 
@@ -9,23 +6,23 @@ struct SkyboxCustomMaterial {
     time_t0: f32,
 }
 
-@group(1) @binding(0)
+@group(2) @binding(0)
 var<uniform> material: SkyboxCustomMaterial;
 
-@group(1) @binding(1)
+@group(2) @binding(1)
 var skybox_texture1: texture_cube<f32>;
-@group(1) @binding(2)
+@group(2) @binding(2)
 var skybox_texture1_sampler: sampler;
 
-@group(1) @binding(3)
+@group(2) @binding(3)
 var skybox_texture2: texture_cube<f32>;
-@group(1) @binding(4)
+@group(2) @binding(4)
 var skybox_texture2_sampler: sampler;
 
 // Noise functions from https://gist.github.com/munrocket/236ed5ba7e409b8bdf1ff6eca5dcdc39
 
 fn rand22(n: vec2f) -> f32 {
-  return fract(sin(dot(n, vec2f(12.9898, 4.1414))) * 43758.5453);
+    return fract(sin(dot(n, vec2f(12.9898, 4.1414))) * 43758.5453);
 }
 
 fn noise2(n: vec2f) -> f32 {
@@ -50,26 +47,25 @@ fn fbm(p: vec2f) -> f32 {
 fn fragment(
     in: VertexOutput
 ) -> @location(0) vec4<f32> {
-  let texture1: vec4<f32> = textureSample(skybox_texture1, skybox_texture1_sampler, in.world_normal);
-  let texture2: vec4<f32> = textureSample(skybox_texture2, skybox_texture2_sampler, in.world_normal);
+    let texture1: vec4<f32> = textureSample(skybox_texture1, skybox_texture1_sampler, in.world_normal);
+    let texture2: vec4<f32> = textureSample(skybox_texture2, skybox_texture2_sampler, in.world_normal);
 
-  let progress = min((globals.time - material.time_t0) / DURATION, 1.0);
+    let progress = min((globals.time - material.time_t0) / DURATION, 1.0);
 
-  if progress >= 0.8 {
-    return texture1;
-  }
+    if progress >= 0.8 {
+        return texture1;
+    }
 
-  let p = 5.0 * (1.0 - progress);
-  let noise_xy = fbm(in.world_normal.xy * p);
-  let noise_yz = fbm(in.world_normal.yz * p);
-  let noise_xz = fbm(in.world_normal.xz * p);
-  let noise = (noise_xy + noise_yz + noise_xz) / 3.0;
+    let p = 5.0 * (1.0 - progress);
+    let noise_xy = fbm(in.world_normal.xy * p);
+    let noise_yz = fbm(in.world_normal.yz * p);
+    let noise_xz = fbm(in.world_normal.xz * p);
+    let noise = (noise_xy + noise_yz + noise_xz) / 3.0;
 
-  let t = 0.8 - progress * 0.8;
-  if noise > t {
-    return texture1;
-  } else {
-    return texture2;
-  }
-
+    let t = 0.8 - progress * 0.8;
+    if noise > t {
+        return texture1;
+    } else {
+        return texture2;
+    }
 }

@@ -9,6 +9,7 @@ use crate::{
     game::Game,
     platforms::{Hovered, Platform, Touched, TOUCHED_PLATFORM_TTL},
     skybox::{generate_skybox_mesh, SkyboxCustom, SkyboxCustomMaterial},
+    PlatformGeneration, SpawnPlatform,
 };
 
 pub const SPAWN_POINT: Vec3 = Vec3::new(-5.0, 5.0, 0.0);
@@ -86,9 +87,11 @@ pub fn spawn_player(mut commands: Commands, mut mesh_assets: ResMut<Assets<Mesh>
 
 pub fn player_movement(
     time: Res<Time>,
-    keyboard: Res<Input<KeyCode>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     touches: Res<Touches>,
     mut game: ResMut<Game>,
+    platform_gen: Res<PlatformGeneration>,
     mut player_query: Query<(
         &Transform,
         &mut KinematicCharacterController,
@@ -101,9 +104,11 @@ pub fn player_movement(
         player_query.single_mut();
 
     let jump_just_pressed = keyboard.just_pressed(KeyCode::Space)
+        || mouse.just_pressed(MouseButton::Left)
         || touches.iter_just_pressed().any(|touch| touch.id() == 0);
 
     let jump_just_released = keyboard.just_released(KeyCode::Space)
+        || mouse.just_released(MouseButton::Left)
         || touches.iter_just_released().any(|touch| touch.id() == 0);
 
     if !player.jump_pressed && jump_just_pressed {
@@ -122,7 +127,7 @@ pub fn player_movement(
     }
 
     // Jump & Gravity
-    let is_grounded = controller_output.map(|o| o.grounded).unwrap_or(false);
+    let is_grounded = controller_output.is_some_and(|o| o.grounded);
 
     if is_grounded {
         player.coyote_time.reset();
@@ -165,7 +170,7 @@ pub fn player_movement(
         }
     }
 
-    let next_untouched_position = next_untouched.unwrap_or(game.next_platform_position);
+    let next_untouched_position = next_untouched.unwrap_or(platform_gen.next_platform_position);
 
     // get the 2d direction towards the platform, normalized
     let direction_2d = (next_untouched_position.xz() - player_transform.translation.xz())
@@ -184,7 +189,7 @@ pub fn player_movement(
 
 pub fn camera_rotation(
     time: Res<Time>,
-    game: Res<Game>,
+    platform_gen: Res<PlatformGeneration>,
     mut camera: Query<(&mut Transform, &GlobalTransform), With<Camera3d>>,
     platforms_unhovered: Query<&Transform, (With<Platform>, Without<Hovered>, Without<Camera3d>)>,
 ) {
@@ -205,16 +210,13 @@ pub fn camera_rotation(
         }
     }
 
-    let next_unhovered_position = next_unhovered.unwrap_or(game.next_platform_position);
+    let next_unhovered_position = next_unhovered.unwrap_or(platform_gen.next_platform_position);
 
     // Rotate the camera towards the platform
     let direction = next_unhovered_position - camera_global_transform.translation() + Vec3::Y * 2.0;
     // code from Transform::look_at
     let back = -direction.try_normalize().unwrap_or(Vec3::NEG_Z);
-    let right = Vec3::Y
-        .cross(back)
-        .try_normalize()
-        .unwrap_or_else(|| Vec3::Z);
+    let right = Vec3::Y.cross(back).try_normalize().unwrap_or(Vec3::Z);
     let up = back.cross(right);
     let rotation = Quat::from_mat3(&Mat3::from_cols(right, up, back));
 
@@ -243,8 +245,7 @@ pub fn player_touch_platform(
                 TimerMode::Once,
             )));
             game.points += 1;
-            commands.run_system(game.update_hud_system);
-            commands.run_system(game.spawn_platform_system);
+            commands.trigger(SpawnPlatform);
         }
     }
 }
@@ -268,10 +269,10 @@ pub fn player_hover_platform(
 }
 
 pub fn force_respawn(
-    keyboard_input: Res<Input<KeyCode>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
     mut player: Query<(&mut Player, &mut Transform)>,
 ) {
-    if keyboard_input.just_pressed(KeyCode::R) {
+    if keyboard_input.just_pressed(KeyCode::KeyR) {
         let (mut player, mut transform) = player.single_mut();
         transform.translation.y = -100.0;
         player.velocity_y = -100.0;

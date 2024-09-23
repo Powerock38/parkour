@@ -1,21 +1,17 @@
-use bevy::{ecs::system::SystemId, prelude::*};
+use bevy::prelude::*;
 
 use crate::{
     platforms::Platform,
     player::{Player, SPAWN_POINT},
+    ChangeThemeRandom, PlatformGeneration, SpawnPlatform,
 };
 
 const NB_PLATFORMS_INIT: u32 = 10;
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct Game {
     pub started: bool,
     pub points: u32,
-    pub update_hud_system: SystemId,
-    pub spawn_platform_system: SystemId,
-    pub next_platform_position: Vec3,
-    pub direction_bias_horizontal: f64,
-    pub direction_bias_vertical: f64,
 }
 
 impl Game {
@@ -24,21 +20,18 @@ impl Game {
     }
 }
 
-pub fn init_game(mut commands: Commands, mut game: ResMut<Game>) {
-    game.started = false;
-    game.points = 0;
-    game.next_platform_position = Vec3::ZERO;
-    game.direction_bias_horizontal = 0.0;
-    game.direction_bias_vertical = 0.0;
-
-    commands.run_system(game.update_hud_system);
+pub fn init_game(mut commands: Commands) {
+    commands.insert_resource(Game::default());
+    commands.insert_resource(PlatformGeneration::default());
 
     for _ in 0..NB_PLATFORMS_INIT {
-        commands.run_system(game.spawn_platform_system);
+        commands.trigger(SpawnPlatform);
     }
 }
 
 pub fn init_hud(mut commands: Commands) {
+    commands.trigger(ChangeThemeRandom);
+
     commands.spawn((
         TextBundle::from_section(
             "Loading...",
@@ -56,16 +49,17 @@ pub fn init_hud(mut commands: Commands) {
 }
 
 pub fn update_hud(game: Res<Game>, mut query: Query<&mut Text, With<Label>>) {
-    let mut text = query.single_mut();
-    if game.points == 0 {
-        text.sections[0].value = "JUMP TO START".to_string();
-    } else {
-        text.sections[0].value = format!("Score: {}", game.points);
+    if game.is_added() || game.is_changed() {
+        let mut text = query.single_mut();
+        if game.started {
+            text.sections[0].value = format!("Score: {}", game.points);
+        } else {
+            text.sections[0].value = "JUMP TO START".to_string();
+        }
     }
 }
 
 pub fn reset(
-    game: ResMut<Game>,
     mut commands: Commands,
     mut player: Query<(&mut Player, &mut Transform), With<Player>>,
     mut camera: Query<&mut Transform, (With<Camera3d>, Without<Player>)>,
@@ -83,6 +77,6 @@ pub fn reset(
         player.velocity_y = 0.0;
         transform.translation = SPAWN_POINT;
 
-        init_game(commands, game);
+        init_game(commands);
     }
 }

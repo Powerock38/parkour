@@ -1,4 +1,4 @@
-use bevy::{asset::LoadState, ecs::system::SystemId, gltf::Gltf, prelude::*};
+use bevy::{asset::LoadState, gltf::Gltf, prelude::*};
 use rand::seq::SliceRandom;
 
 use crate::{
@@ -72,13 +72,13 @@ pub struct ThemeLoad {
     pub platforms: Vec<Handle<Gltf>>,
 }
 
+#[derive(Event)]
+pub struct ChangeThemeRandom;
+
 #[derive(Resource)]
 pub struct ThemeCurrent {
     pub theme: ThemeLoad,
 }
-
-#[derive(Resource)]
-pub struct ThemeChangeSystem(pub SystemId);
 
 #[derive(Resource)]
 pub struct ThemeChange {
@@ -86,6 +86,7 @@ pub struct ThemeChange {
 }
 
 pub fn change_theme(
+    _trigger: Trigger<ChangeThemeRandom>,
     mut commands: Commands,
     assets_server: Res<AssetServer>,
     theme_current: Option<Res<ThemeCurrent>>,
@@ -97,8 +98,7 @@ pub fn change_theme(
         .filter(|theme| {
             theme_current
                 .as_ref()
-                .map(|theme_current| theme_current.theme.id != theme.id)
-                .unwrap_or(true)
+                .map_or(true, |theme_current| theme_current.theme.id != theme.id)
         })
         .collect::<Vec<_>>();
 
@@ -112,7 +112,7 @@ pub fn change_theme(
             platforms: theme
                 .platforms
                 .iter()
-                .map(|path| assets_server.load(format!("platforms/{}", path)))
+                .map(|path| assets_server.load(format!("platforms/{path}")))
                 .collect(),
         },
     });
@@ -140,12 +140,13 @@ pub fn apply_loaded_theme(
         if fully_loaded {
             let mut time_t0 = time.elapsed_seconds_wrapped();
             let sky_texture1 = theme_change.theme.skybox.clone();
-            let sky_texture2 = theme_current
-                .map(|theme_current| theme_current.theme.skybox.clone())
-                .unwrap_or_else(|| {
+            let sky_texture2 = theme_current.map_or_else(
+                || {
                     time_t0 += 30.0; // prevent shader from running for nothing when tex1 == tex2
                     sky_texture1.clone()
-                });
+                },
+                |theme_current| theme_current.theme.skybox.clone(),
+            );
 
             commands
                 .entity(skybox_entity.single())
@@ -168,12 +169,8 @@ pub fn apply_loaded_theme(
     }
 }
 
-pub fn force_theme_change(
-    mut commands: Commands,
-    keyboard_input: Res<Input<KeyCode>>,
-    theme_change_system: Res<ThemeChangeSystem>,
-) {
-    if keyboard_input.just_pressed(KeyCode::T) {
-        commands.run_system(theme_change_system.0);
+pub fn force_theme_change(mut commands: Commands, keyboard_input: Res<ButtonInput<KeyCode>>) {
+    if keyboard_input.just_pressed(KeyCode::KeyT) {
+        commands.trigger(ChangeThemeRandom);
     }
 }
