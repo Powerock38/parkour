@@ -150,13 +150,11 @@ pub fn apply_loaded_theme(
 
             commands
                 .entity(skybox_entity.single())
-                .insert(skybox_materials.add(SkyboxCustomMaterial {
+                .insert(skybox_materials.add(SkyboxCustomMaterial::new(
                     time_t0,
                     sky_texture1,
                     sky_texture2,
-                    #[cfg(target_arch = "wasm32")]
-                    _padding: [0.0; 3],
-                }));
+                )));
 
             commands.insert_resource(ThemeCurrent {
                 theme: theme_change.theme.clone(),
