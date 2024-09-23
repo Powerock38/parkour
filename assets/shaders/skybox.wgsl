@@ -4,6 +4,12 @@ const DURATION: f32 = 20.0;
 
 struct SkyboxCustomMaterial {
     time_t0: f32,
+    #ifdef SIXTEEN_BYTE_ALIGNMENT
+      // WebGL2 structs must be 16 byte aligned.
+      _webgl2_padding_0: f32,
+      _webgl2_padding_1: f32,
+      _webgl2_padding_2: f32,
+    #endif
 }
 
 @group(2) @binding(0)

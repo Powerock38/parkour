@@ -154,6 +154,8 @@ pub fn apply_loaded_theme(
                     time_t0,
                     sky_texture1,
                     sky_texture2,
+                    #[cfg(target_arch = "wasm32")]
+                    _padding: [0.0; 3],
                 }));
 
             commands.insert_resource(ThemeCurrent {

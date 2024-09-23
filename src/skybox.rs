@@ -22,6 +22,9 @@ pub struct SkyboxCustomMaterial {
     #[texture(3, dimension = "cube")]
     #[sampler(4)]
     pub sky_texture2: Handle<Image>,
+
+    #[cfg(target_arch = "wasm32")]
+    pub _padding: [f32; 3],
 }
 
 impl Material for SkyboxCustomMaterial {
