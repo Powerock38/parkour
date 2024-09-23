@@ -15,6 +15,13 @@ pub struct SkyboxCustomMaterial {
     #[uniform(0)]
     time_t0: f32,
 
+    #[cfg(target_arch = "wasm32")]
+    _padding_0: f32,
+    #[cfg(target_arch = "wasm32")]
+    _padding_1: f32,
+    #[cfg(target_arch = "wasm32")]
+    _padding_2: f32,
+
     #[texture(1, dimension = "cube")]
     #[sampler(2)]
     sky_texture1: Handle<Image>,
@@ -22,13 +29,6 @@ pub struct SkyboxCustomMaterial {
     #[texture(3, dimension = "cube")]
     #[sampler(4)]
     sky_texture2: Handle<Image>,
-
-    #[cfg(target_arch = "wasm32")]
-    _padding_0: f32,
-    #[cfg(target_arch = "wasm32")]
-    _padding_1: f32,
-    #[cfg(target_arch = "wasm32")]
-    _padding_2: f32,
 }
 
 impl SkyboxCustomMaterial {
