@@ -1,4 +1,4 @@
-use bevy::{asset::LoadState, gltf::Gltf, prelude::*};
+use bevy::{asset::LoadState, prelude::*};
 use rand::seq::SliceRandom;
 
 use crate::{
@@ -69,7 +69,7 @@ pub const THEMES: &[Theme] = &[
 pub struct ThemeLoad {
     pub id: &'static str,
     pub skybox: Handle<Image>,
-    pub platforms: Vec<Handle<Gltf>>,
+    pub platforms: Vec<Handle<Scene>>,
 }
 
 #[derive(Event)]
@@ -112,7 +112,10 @@ pub fn change_theme(
             platforms: theme
                 .platforms
                 .iter()
-                .map(|path| assets_server.load(format!("platforms/{path}")))
+                .map(|path| {
+                    assets_server
+                        .load(GltfAssetLabel::Scene(0).from_asset(format!("platforms/{path}")))
+                })
                 .collect(),
         },
     });
@@ -134,11 +137,14 @@ pub fn apply_loaded_theme(
             .theme
             .platforms
             .iter()
-            .all(|handle| assets_server.load_state(handle) == LoadState::Loaded)
-            && assets_server.load_state(&theme_change.theme.skybox) == LoadState::Loaded;
+            .all(|handle| matches!(assets_server.load_state(handle), LoadState::Loaded))
+            && matches!(
+                assets_server.load_state(&theme_change.theme.skybox),
+                LoadState::Loaded
+            );
 
         if fully_loaded {
-            let mut time_t0 = time.elapsed_seconds_wrapped();
+            let mut time_t0 = time.elapsed_secs_wrapped();
             let sky_texture1 = theme_change.theme.skybox.clone();
             let sky_texture2 = theme_current.map_or_else(
                 || {
@@ -150,10 +156,8 @@ pub fn apply_loaded_theme(
 
             commands
                 .entity(skybox_entity.single())
-                .insert(skybox_materials.add(SkyboxCustomMaterial::new(
-                    time_t0,
-                    sky_texture1,
-                    sky_texture2,
+                .insert(MeshMaterial3d(skybox_materials.add(
+                    SkyboxCustomMaterial::new(time_t0, sky_texture1, sky_texture2),
                 )));
 
             commands.insert_resource(ThemeCurrent {

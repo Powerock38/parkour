@@ -1,3 +1,4 @@
+use avian3d::prelude::*;
 use bevy::prelude::*;
 
 mod game;
@@ -6,7 +7,6 @@ mod player;
 mod skybox;
 mod theme;
 
-use bevy_rapier3d::plugin::{NoUserData, RapierPhysicsPlugin};
 use game::*;
 use platforms::*;
 use player::*;
@@ -35,8 +35,7 @@ fn main() {
                     meta_check: bevy::asset::AssetMetaCheck::Never,
                     ..default()
                 }),
-            RapierPhysicsPlugin::<NoUserData>::default(),
-            // bevy_rapier3d::render::RapierDebugRenderPlugin::default(),
+            PhysicsPlugins::default(),
             MaterialPlugin::<SkyboxCustomMaterial>::default(),
         ))
         .insert_resource(AmbientLight {
@@ -58,15 +57,14 @@ fn main() {
                 camera_rotation,
                 update_moving_platforms,
                 delete_touched_platforms,
-                gltf_compute_colliders,
-                reset,
+                reset.after(player_movement),
                 force_respawn,
                 force_theme_change,
                 update_hud,
             )
                 .run_if(in_state(AppState::Game)),
         )
-        .observe(change_theme)
-        .observe(spawn_platform)
+        .add_observer(change_theme)
+        .add_observer(spawn_platform)
         .run();
 }

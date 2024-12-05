@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.14.2"
-bevy_rapier3d = "0.27.0"
+bevy = "0.15.0"
+avian3d = { git = "https://github.com/Jondolf/avian.git" }
 rand = "0.8.5"
 log = { version = "*", features = [
   "max_level_debug",
@@ -16,7 +16,6 @@ log = { version = "*", features = [
 dev = [
   "bevy/dynamic_linking",
   "bevy/file_watcher",
-  "bevy_rapier3d/debug-render-3d",
 ]
 
 [lints.clippy]
@@ -29,16 +28,10 @@ too_many_lines = "allow"
 too_many_arguments = "allow"
 cast_possible_truncation = "allow"
 cast_precision_loss = "allow"
-cast_possible_wrap = "allow"
 cast_sign_loss = "allow"
 cast_lossless = "allow"
 needless_pass_by_value = "allow"
 match_wildcard_for_single_variants = "allow"
-single_match = "allow"
-used_underscore_binding = "allow"
-unnecessary_wraps = "allow"
-redundant_closure_for_method_calls = "allow"
-naive_bytecount = "allow"
 
 
 # Dev optimizations

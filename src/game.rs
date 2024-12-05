@@ -1,3 +1,4 @@
+use avian3d::prelude::*;
 use bevy::prelude::*;
 
 use crate::{
@@ -33,18 +34,16 @@ pub fn init_hud(mut commands: Commands) {
     commands.trigger(ChangeThemeRandom);
 
     commands.spawn((
-        TextBundle::from_section(
-            "Loading...",
-            TextStyle {
-                font_size: 30.0,
-                ..default()
-            },
-        )
-        .with_style(Style {
+        Label,
+        Text::new("Loading..."),
+        TextFont {
+            font_size: 30.0,
+            ..default()
+        },
+        Node {
             margin: UiRect::all(Val::Px(5.)),
             ..default()
-        }),
-        Label,
+        },
     ));
 }
 
@@ -52,30 +51,31 @@ pub fn update_hud(game: Res<Game>, mut query: Query<&mut Text, With<Label>>) {
     if game.is_added() || game.is_changed() {
         let mut text = query.single_mut();
         if game.started {
-            text.sections[0].value = format!("Score: {}", game.points);
+            text.0 = format!("Score: {}", game.points);
         } else {
-            text.sections[0].value = "JUMP TO START".to_string();
+            text.0 = "JUMP TO START".to_string();
         }
     }
 }
 
 pub fn reset(
     mut commands: Commands,
-    mut player: Query<(&mut Player, &mut Transform), With<Player>>,
-    mut camera: Query<&mut Transform, (With<Camera3d>, Without<Player>)>,
+    q_player: Single<(&mut Transform, &mut LinearVelocity), With<Player>>,
+    q_camera: Single<&mut Transform, (With<Camera3d>, Without<Player>)>,
     platforms: Query<Entity, With<Platform>>,
 ) {
-    let (mut player, mut transform) = player.single_mut();
-    if player.velocity_y < -20.0 {
-        for entity in platforms.iter() {
+    let (mut transform, mut velocity) = q_player.into_inner();
+
+    if velocity.y < -20.0 {
+        for entity in &platforms {
             commands.entity(entity).despawn_recursive();
         }
 
-        let mut camera_transform = camera.single_mut();
+        let mut camera_transform = q_camera.into_inner();
         camera_transform.look_at(Vec3::X, Vec3::Y);
 
-        player.velocity_y = 0.0;
         transform.translation = SPAWN_POINT;
+        *velocity = LinearVelocity::ZERO;
 
         init_game(commands);
     }

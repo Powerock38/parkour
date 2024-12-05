@@ -1,9 +1,6 @@
-use bevy::{
-    gltf::{Gltf, GltfMesh, GltfNode},
-    prelude::*,
-};
-use bevy_rapier3d::prelude::*;
-use rand::{seq::SliceRandom, Rng};
+use avian3d::prelude::*;
+use bevy::prelude::*;
+use rand::prelude::*;
 use std::f32::consts::PI;
 
 use crate::{
@@ -42,12 +39,6 @@ pub struct Touched(pub Timer);
 
 #[derive(Component)]
 pub struct Hovered;
-
-#[derive(Component)]
-pub struct GltfLoader {
-    handle: Handle<Gltf>,
-    transform: Transform,
-}
 
 #[derive(Resource, Default)]
 pub struct PlatformGeneration {
@@ -126,7 +117,13 @@ pub fn spawn_platform(
     transform.rotate_y(rng.gen_range(0.0..PI * 2.0));
 
     // Spawn platform
-    let mut c = commands.spawn((GltfLoader { handle, transform }, Platform));
+    let mut c = commands.spawn((
+        Platform,
+        SceneRoot(handle),
+        transform,
+        ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh),
+        RigidBody::Static,
+    ));
 
     // Chance to be a moving platform
     let moving_platform_chance =
@@ -150,9 +147,9 @@ pub fn update_moving_platforms(
 
     for (mut transform, mut moving_platform) in &mut platforms_transforms {
         if moving_platform.going_negative {
-            moving_platform.progress -= speed * time.delta_seconds();
+            moving_platform.progress -= speed * time.delta_secs();
         } else {
-            moving_platform.progress += speed * time.delta_seconds();
+            moving_platform.progress += speed * time.delta_secs();
         }
 
         if moving_platform.progress > 1.0 {
@@ -175,47 +172,6 @@ pub fn delete_touched_platforms(
     for (entity, mut touched) in &mut query {
         if touched.0.tick(time.delta()).finished() {
             commands.entity(entity).despawn_recursive();
-        }
-    }
-}
-
-pub fn gltf_compute_colliders(
-    mut commands: Commands,
-    mut query_gltf_loader: Query<(&GltfLoader, Entity)>,
-    gltf_assets: Res<Assets<Gltf>>,
-    gltf_mesh_assets: Res<Assets<GltfMesh>>,
-    gltf_node_assets: Res<Assets<GltfNode>>,
-    mesh_assets: Res<Assets<Mesh>>,
-) {
-    for (gltf_loader, gltf_loader_entity) in &mut query_gltf_loader {
-        let gltf = gltf_assets.get(&gltf_loader.handle);
-
-        if let Some(gltf) = gltf {
-            if gltf.nodes.len() != 1 {
-                warn!(
-                    "Gltf file must have exactly one node: {} has {} nodes",
-                    gltf_loader.handle.path().unwrap(),
-                    gltf.nodes.len()
-                );
-            }
-
-            let node = gltf_node_assets.get(&gltf.nodes[0]).unwrap();
-            let gltf_mesh = gltf_mesh_assets.get(&node.mesh.clone().unwrap()).unwrap();
-            let mesh_primitive = &gltf_mesh.primitives[0];
-            let mesh = mesh_assets.get(&mesh_primitive.mesh).unwrap();
-
-            commands
-                .entity(gltf_loader_entity)
-                .insert((
-                    SceneBundle {
-                        scene: gltf.scenes.first().unwrap().clone(),
-                        transform: gltf_loader.transform,
-                        ..default()
-                    },
-                    Collider::from_bevy_mesh(mesh, &ComputedColliderShape::default()).unwrap(),
-                    RigidBody::Fixed,
-                ))
-                .remove::<GltfLoader>();
         }
     }
 }

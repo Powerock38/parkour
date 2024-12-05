@@ -1,14 +1,14 @@
+use avian3d::prelude::*;
 use bevy::{
     pbr::{NotShadowCaster, NotShadowReceiver},
     prelude::*,
 };
-use bevy_rapier3d::prelude::*;
 use std::f32::consts::PI;
 
 use crate::{
     game::Game,
     platforms::{Hovered, Platform, Touched, TOUCHED_PLATFORM_TTL},
-    skybox::{generate_skybox_mesh, SkyboxCustom, SkyboxCustomMaterial},
+    skybox::{generate_skybox_mesh, SkyboxCustom},
     PlatformGeneration, SpawnPlatform,
 };
 
@@ -33,7 +33,6 @@ pub struct Player {
     coyote_time: Timer,
     jump_pressed: bool,
     jump_boost_duration: Timer,
-    pub velocity_y: f32,
     last_direction_2d: Vec2,
 }
 
@@ -47,38 +46,27 @@ pub fn spawn_player(mut commands: Commands, mut mesh_assets: ResMut<Assets<Mesh>
                     JUMP_BOOST_DURATION + JUMP_BOOST_MIN_TIME,
                     TimerMode::Once,
                 ),
-                velocity_y: 0.0,
                 last_direction_2d: Vec2::ZERO,
             },
-            RigidBody::KinematicPositionBased,
-            Collider::ball(1.0),
-            KinematicCharacterController {
-                max_slope_climb_angle: PI, // climb anything
-                ..default()
-            },
-            TransformBundle::from_transform(Transform::from_translation(SPAWN_POINT)),
-            Ccd { enabled: true },
-            VisibilityBundle {
-                visibility: Visibility::Visible,
-                ..default()
-            },
+            RayCaster::new(Vec3::ZERO, -Dir3::Y).with_max_hits(1),
+            RigidBody::Kinematic,
+            Collider::sphere(1.0),
+            Transform::from_translation(SPAWN_POINT),
+            Visibility::default(),
         ))
         .with_children(|c| {
-            c.spawn((Camera3dBundle {
-                projection: Projection::Perspective(PerspectiveProjection {
+            c.spawn((
+                Camera3d::default(),
+                Projection::Perspective(PerspectiveProjection {
                     fov: PI / 2.0,
                     ..default()
                 }),
-                transform: Transform::from_translation(Vec3::Y).looking_at(Vec3::X, Vec3::Y),
-                ..default()
-            },));
+                Transform::from_translation(Vec3::Y).looking_at(Vec3::X, Vec3::Y),
+            ));
 
             c.spawn((
                 SkyboxCustom,
-                MaterialMeshBundle::<SkyboxCustomMaterial> {
-                    mesh: mesh_assets.add(generate_skybox_mesh()),
-                    ..default()
-                },
+                Mesh3d(mesh_assets.add(generate_skybox_mesh())),
                 NotShadowCaster,
                 NotShadowReceiver,
             ));
@@ -92,16 +80,12 @@ pub fn player_movement(
     touches: Res<Touches>,
     mut game: ResMut<Game>,
     platform_gen: Res<PlatformGeneration>,
-    mut player_query: Query<(
-        &Transform,
-        &mut KinematicCharacterController,
-        Option<&KinematicCharacterControllerOutput>,
-        &mut Player,
-    )>,
-    platforms_untouched: Query<&Transform, (With<Platform>, Without<Touched>)>,
+    q_player: Single<(&Transform, &mut LinearVelocity, &RayHits, &mut Player)>,
+    q_children: Query<&Children>,
+    q_platforms_untouched: Query<(Entity, &Transform), (With<Platform>, Without<Touched>)>,
+    q_platforms_touched: Query<Entity, (With<Platform>, With<Touched>)>,
 ) {
-    let (player_transform, mut controller, controller_output, mut player) =
-        player_query.single_mut();
+    let (player_transform, mut velocity, ray_hits, mut player) = q_player.into_inner();
 
     let jump_just_pressed = keyboard.just_pressed(KeyCode::Space)
         || mouse.just_pressed(MouseButton::Left)
@@ -127,7 +111,17 @@ pub fn player_movement(
     }
 
     // Jump & Gravity
-    let is_grounded = controller_output.is_some_and(|o| o.grounded);
+    let mut velocity_y = velocity.y;
+
+    let is_grounded = ray_hits
+        .iter()
+        .filter(|hit| hit.time_of_impact < 1.0)
+        .any(|hit| {
+            q_platforms_touched
+                .iter()
+                .chain(q_platforms_untouched.iter().map(|p| p.0))
+                .any(|p| p == hit.entity || q_children.iter_descendants(p).any(|c| c == hit.entity))
+        });
 
     if is_grounded {
         player.coyote_time.reset();
@@ -136,14 +130,14 @@ pub fn player_movement(
     let is_grounded_coyote = is_grounded || !player.coyote_time.tick(time.delta()).finished();
 
     if is_grounded_coyote {
-        player.velocity_y = 0.0;
+        velocity_y = 0.0;
 
         if player.jump_pressed {
-            player.velocity_y += JUMP;
+            velocity_y += JUMP;
             player.jump_boost_duration.reset();
         }
     } else {
-        player.velocity_y += GRAVITY * time.delta_seconds();
+        velocity_y += GRAVITY * time.delta_secs();
     }
 
     player.jump_boost_duration.tick(time.delta());
@@ -152,14 +146,14 @@ pub fn player_movement(
         && !player.jump_boost_duration.finished()
         && player.jump_boost_duration.elapsed_secs() > JUMP_BOOST_MIN_TIME
     {
-        player.velocity_y += JUMP_BOOST_SPEED * time.delta_seconds();
+        velocity_y += JUMP_BOOST_SPEED * time.delta_secs();
     }
 
     // MOVEMENT: move towards the closest platform without Touched
     let mut next_untouched = None;
     let mut min_distance = f32::MAX;
 
-    for platform_transform in platforms_untouched.iter() {
+    for (_, platform_transform) in &q_platforms_untouched {
         let distance = platform_transform
             .translation
             .distance(player_transform.translation);
@@ -182,9 +176,7 @@ pub fn player_movement(
     let forward_speed = SPEED * (game.difficulty() + 1.0);
     let movement_2d = direction_2d * forward_speed;
 
-    let movement = Vec3::new(movement_2d.x, player.velocity_y, movement_2d.y);
-
-    controller.translation = Some(movement * time.delta_seconds());
+    velocity.0 = Vec3::new(movement_2d.x, velocity_y, movement_2d.y);
 }
 
 pub fn camera_rotation(
@@ -199,7 +191,7 @@ pub fn camera_rotation(
     let mut next_unhovered = None;
     let mut min_distance = f32::MAX;
 
-    for platform_transform in platforms_unhovered.iter() {
+    for platform_transform in &platforms_unhovered {
         let distance = platform_transform
             .translation
             .distance(camera_global_transform.translation());
@@ -223,58 +215,61 @@ pub fn camera_rotation(
     // frame-independent lerp
     camera_transform.rotation = camera_transform
         .rotation
-        .lerp(rotation, CAMERA_ROTATION_SPEED * time.delta_seconds());
+        .lerp(rotation, CAMERA_ROTATION_SPEED * time.delta_secs());
 }
 
 pub fn player_touch_platform(
     mut commands: Commands,
     mut game: ResMut<Game>,
-    rapier_context: Res<RapierContext>,
-    player: Query<(Entity, &Transform), With<Player>>,
-    platforms: Query<Entity, (With<Platform>, Without<Touched>)>,
+    collisions: Res<Collisions>,
+    player: Single<Entity, With<Player>>,
+    q_platforms_untouched: Query<Entity, (With<Platform>, Without<Touched>)>,
+    q_children: Query<&Children>,
 ) {
-    let (player_entity, player_transform) = player.single();
+    let player_entity = *player;
 
-    let filter = QueryFilter::default().exclude_rigid_body(player_entity);
-    let pos = player_transform.translation;
-
-    if let Some((entity, _)) = rapier_context.cast_ray(pos, -Vec3::Y, 2.0, true, filter) {
-        if platforms.contains(entity) {
-            commands.entity(entity).insert(Touched(Timer::from_seconds(
-                TOUCHED_PLATFORM_TTL,
-                TimerMode::Once,
-            )));
-            game.points += 1;
-            commands.trigger(SpawnPlatform);
-        }
+    if let Some(entity) = q_platforms_untouched.iter().find(|platform| {
+        collisions.contains(player_entity, *platform)
+            || q_children
+                .iter_descendants(*platform)
+                .any(|c| collisions.contains(c, player_entity))
+    }) {
+        commands.entity(entity).insert(Touched(Timer::from_seconds(
+            TOUCHED_PLATFORM_TTL,
+            TimerMode::Once,
+        )));
+        game.points += 1;
+        commands.trigger(SpawnPlatform);
     }
 }
 
 pub fn player_hover_platform(
     mut commands: Commands,
-    rapier_context: Res<RapierContext>,
-    player: Query<(Entity, &Transform), With<Player>>,
-    platforms: Query<Entity, (With<Platform>, Without<Hovered>)>,
+    q_player: Single<&RayHits, With<Player>>,
+    q_platforms_unhovered: Query<Entity, (With<Platform>, Without<Hovered>)>,
+    q_children: Query<&Children>,
 ) {
-    let (player_entity, player_transform) = player.single();
+    let ray_hits = q_player.into_inner();
 
-    let filter = QueryFilter::default().exclude_rigid_body(player_entity);
-    let pos = player_transform.translation;
-
-    if let Some((entity, _)) = rapier_context.cast_ray(pos, -Vec3::Y, 100.0, true, filter) {
-        if platforms.contains(entity) {
-            commands.entity(entity).insert(Hovered);
-        }
+    if let Some(platform) = q_platforms_unhovered.iter().find(|platform| {
+        ray_hits.iter().any(|hit| {
+            *platform == hit.entity
+                || q_children
+                    .iter_descendants(*platform)
+                    .any(|c| c == hit.entity)
+        })
+    }) {
+        commands.entity(platform).try_insert(Hovered);
     }
 }
 
 pub fn force_respawn(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut player: Query<(&mut Player, &mut Transform)>,
+    q_player: Single<(&mut Transform, &mut LinearVelocity), With<Player>>,
 ) {
     if keyboard_input.just_pressed(KeyCode::KeyR) {
-        let (mut player, mut transform) = player.single_mut();
+        let (mut transform, mut velocity) = q_player.into_inner();
         transform.translation.y = -100.0;
-        player.velocity_y = -100.0;
+        velocity.y = -100.0;
     }
 }
