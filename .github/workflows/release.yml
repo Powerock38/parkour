@@ -32,10 +32,10 @@ jobs:
           wasm-bindgen --no-typescript --out-name bevy_game --out-dir wasm --target web target/wasm32-unknown-unknown/release/${{ env.binary }}.wasm
           cp -r assets wasm/ || true # Try to copy, but ignore if it can't copy if source directory does not exist
 
-      - name: Optimize with wasm-opt
-        uses: NiklasEi/wasm-opt-action@v2.1.0
-        with:
-          file: wasm/*.wasm
+      # - name: Optimize with wasm-opt
+      #   uses: NiklasEi/wasm-opt-action@v2.1.0
+      #   with:
+      #     file: wasm/*.wasm
 
       - name: Package as a zip
         working-directory: ./wasm
